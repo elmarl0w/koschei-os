@@ -114,8 +114,14 @@ build_img() {
     PART="$BINARIES_DIR/part.img"
 
     # 1. FAT32-раздел с ядром, initramfs, конфигом syslinux и списком серверов
+    # -g 255/63 и -h 2048 КРИТИЧНЫ для старых BIOS без EDD (USB в CHS-режиме):
+    # загрузочный сектор syslinux считает адреса по геометрии из BPB, и с
+    # дефолтной (16 голов/32 sect у 256МБ-файла) чтение уходит мимо ->
+    # "Boot error" на железе, хотя в qemu (EDD/LBA) образ грузится нормально.
+    # 255/63 совпадает с тем, как BIOS маппит USB-HDD; hidden=2048 = смещение
+    # раздела (1 МиБ) от начала диска.
     dd if=/dev/zero of="$PART" bs=1M count=$PART_MB status=none
-    mkfs.vfat -F 32 -n THINCLIENT "$PART" >/dev/null
+    mkfs.vfat -F 32 -g 255/63 -h 2048 -n THINCLIENT "$PART" >/dev/null
     mcopy -i "$PART" "$BINARIES_DIR/bzImage"          ::/bzImage
     mcopy -i "$PART" "$BINARIES_DIR/rootfs.cpio.gz"   ::/initrd.gz
     mcopy -i "$PART" "$BOARD_DIR/syslinux.cfg"        ::/syslinux.cfg
