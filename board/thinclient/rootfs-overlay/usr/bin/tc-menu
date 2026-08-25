@@ -442,10 +442,79 @@ run_settings() {
     done
 }
 
+# --- Экран настроек ОДНОГО сервера -----------------------------------------
+# Пункты выбираются стрелками (ui_menu); протокол — выбором из списка, а не
+# вводом текста. Каждое изменение сразу пишется в servers.conf.
+
+# ввод строки: результат в ASK (пусто = оставить как есть); ;/CR вычищаются
+_ask() {   # $1=подпись  $2=текущее
+    clear
+    echo "=== $1 ==="
+    echo "Current: $2"
+    echo "Empty = keep as is."
+    printf "> "
+    read -r ASK
+    ASK=$(printf '%s' "$ASK" | tr -d ';\r\n')
+}
+
+# перезаписать строку сервера и обновить локальное состояние редактора
+_apply_server() {   # $1=имя $2=адрес $3=протокол
+    if [ -n "$3" ]; then _row="$1;$2;$3"; else _row="$1;$2"; fi
+    edit_server "$s_name;$s_addr" "$_row"
+    s_name=$1; s_addr=$2; s_sec=$3
+}
+
+server_editor() {   # $1=имя $2=адрес $3=протокол
+    s_name=$1; s_addr=$2; s_sec=$3
+    while true; do
+        ui_menu "Server: $s_name" \
+            "Name${TAB}$s_name" \
+            "Address${TAB}$s_addr" \
+            "Security${TAB}${s_sec:-auto}" \
+            "#" \
+            "Delete server"
+        case "$UICHOICE" in
+            0)
+                _ask "Server name" "$s_name"
+                [ -n "$ASK" ] && _apply_server "$ASK" "$s_addr" "$s_sec"
+                ;;
+            1)
+                _ask "Address (ip or ip:port)" "$s_addr"
+                [ -n "$ASK" ] && _apply_server "$s_name" "$ASK" "$s_sec"
+                ;;
+            2)
+                ui_menu "Security: $s_name" \
+                    "auto - negotiate (default)" \
+                    "rdp  - plain RDP, no NLA/TLS" \
+                    "tls  - TLS only" \
+                    "nla  - NLA"
+                case "$UICHOICE" in
+                    0) _apply_server "$s_name" "$s_addr" "" ;;
+                    1) _apply_server "$s_name" "$s_addr" "rdp" ;;
+                    2) _apply_server "$s_name" "$s_addr" "tls" ;;
+                    3) _apply_server "$s_name" "$s_addr" "nla" ;;
+                esac
+                ;;
+            3)
+                clear
+                printf 'Delete server "%s" (%s)?  y = delete: ' "$s_name" "$s_addr"
+                read -r yn
+                case "$yn" in
+                    y|Y) delete_server "$s_name;$s_addr"; return ;;
+                esac
+                ;;
+            *)
+                return
+                ;;
+        esac
+    done
+}
+
 # Экран управления серверами: лаунчер в режиме --manage возвращает одно
-# действие (ADD/EDIT/DELETE/BACK), применяем и снова показываем экран,
+# действие (ADD/SELECT/DELETE/BACK), применяем и снова показываем экран,
 # пока не BACK/пусто. Вывод лаунчера НЕ перехватываем (ncurses рисует в
-# терминал) — действие читаем из файла $OUT.
+# терминал) — действие читаем из файла $OUT. Enter на сервере открывает
+# его экран настроек (server_editor).
 manage_loop() {
     while true; do
         rm -f "$OUT"
@@ -453,21 +522,22 @@ manage_loop() {
         a=$(cat "$OUT" 2>/dev/null)
         case "$a" in
             ADD\ *)
-                entry=${a#ADD }              # имя;адрес;протокол
+                entry=${a#ADD }              # имя;адрес
                 name=${entry%%;*}
-                rest=${entry#*;}             # адрес;протокол
+                rest=${entry#*;}
+                addr=${rest%%;*}             # терпимо к лишним полям
+                [ -n "$name" ] && [ -n "$addr" ] && save_server "$name" "$addr" ""
+                ;;
+            SELECT\ *)
+                entry=${a#SELECT }           # имя;адрес[;протокол]
+                name=${entry%%;*}
+                rest=${entry#*;}
                 addr=${rest%%;*}
                 if [ "$rest" = "$addr" ]; then sec=""; else sec=${rest#*;}; fi
-                [ -n "$name" ] && [ -n "$addr" ] && save_server "$name" "$addr" "$sec"
+                [ -n "$name" ] && [ -n "$addr" ] && server_editor "$name" "$addr" "$sec"
                 ;;
             DELETE\ *)
                 delete_server "${a#DELETE }"
-                ;;
-            EDIT\ *)
-                rest=${a#EDIT }
-                old=${rest%%"$TAB"*}
-                new=${rest#*"$TAB"}
-                [ "$old" != "$new" ] && edit_server "$old" "$new"
                 ;;
             *)
                 break

@@ -15,7 +15,7 @@
  *   POWEROFF                выключение
  * Режим управления серверами (--manage, вызывается из Settings через tc-menu):
  *   ADD <name>;<ip>         добавить сервер в servers.conf
- *   EDIT <old>\t<new>       заменить запись сервера
+ *   SELECT <name>;<ip>[;<sec>]  открыть экран настроек сервера (рисует tc-menu)
  *   DELETE <name>;<ip>      удалить сервер
  *   BACK                    выйти из экрана управления
  * Обобщённое меню (--menu <title> <file>, для экранов настроек tc-menu):
@@ -139,13 +139,6 @@ static void write_line(const char *s)
     fputs(s, f);
     fputc('\n', f);
     fclose(f);
-}
-
-/* протокол сервера: допустимы только rdp/tls/nla, иначе пусто (=дефолт) */
-static void norm_sec(char *s)
-{
-    if (strcmp(s, "rdp") && strcmp(s, "tls") && strcmp(s, "nla"))
-        s[0] = 0;
 }
 
 /* сервисные кнопки — вертикальным столбиком внизу. Главный экран — только
@@ -307,66 +300,37 @@ static void strip_bad(char *s)
 
 static int do_add(void)
 {
-    char name[64], ip[64], sec[8] = "";
+    char name[64], ip[64];
     char entry[144];
 
     if (prompt("Server name:", name, sizeof name, 0) &&
         prompt("IP address (ip or ip:port):", ip, sizeof ip, 0)) {
-        prompt("Security rdp/tls/nla (empty = default):", sec, sizeof sec, 1);
         strip_bad(name);
         strip_bad(ip);
-        strip_bad(sec);
-        norm_sec(sec);
         if (!name[0] || !ip[0])
             return 0;
         endwin();
-        snprintf(entry, sizeof entry, "ADD %s;%s;%s", name, ip, sec);
+        snprintf(entry, sizeof entry, "ADD %s;%s", name, ip);
         write_line(entry);
         return 1;
     }
     return 0;
 }
 
-/* редактировать сервер i: пустое поле = оставить старое значение.
- * Пишем "EDIT old_name;old_ip \t new_name;new_ip" (tab-разделитель). */
-static int do_edit(int i)
+/* открыть экран настроек сервера i: сам экран (имя/адрес/протокол-выбором/
+ * удаление) рисует tc-menu — мы лишь сообщаем, какой сервер выбран */
+static int do_select(int i)
 {
-    char name[64] = "", ip[64] = "", sec[8] = "";
-    char lbl1[128], lbl2[128], lbl3[128], oldp[136], newp[160], msg[320];
+    char entry[176];
 
-    snprintf(lbl1, sizeof lbl1, "New name [%s]:", servers[i].name);
-    snprintf(lbl2, sizeof lbl2, "New IP [%s]:", servers[i].ip);
-    snprintf(lbl3, sizeof lbl3, "Security [%s] (rdp/tls/nla, - to clear):",
-             servers[i].sec[0] ? servers[i].sec : "default");
-    if (!prompt(lbl1, name, sizeof name, 1))
-        return 0;
-    if (!prompt(lbl2, ip, sizeof ip, 1))
-        return 0;
-    prompt(lbl3, sec, sizeof sec, 1);
-    strip_bad(name);
-    strip_bad(ip);
-    strip_bad(sec);
-    if (!name[0])
-        snprintf(name, sizeof name, "%s", servers[i].name);
-    if (!ip[0])
-        snprintf(ip, sizeof ip, "%s", servers[i].ip);
-    /* протокол: пусто = оставить старый; "-" = очистить; иначе новый (валидный) */
-    if (!sec[0])
-        snprintf(sec, sizeof sec, "%s", servers[i].sec);
-    else if (!strcmp(sec, "-"))
-        sec[0] = 0;
-    else
-        norm_sec(sec);
-    /* ключ (для поиска строки) — 2 поля имя;адрес; новое значение — 3 поля
-     * (без хвостовой ';', если протокол пуст) */
-    snprintf(oldp, sizeof oldp, "%s;%s", servers[i].name, servers[i].ip);
-    if (sec[0])
-        snprintf(newp, sizeof newp, "%s;%s;%s", name, ip, sec);
-    else
-        snprintf(newp, sizeof newp, "%s;%s", name, ip);
     endwin();
-    snprintf(msg, sizeof msg, "EDIT %s\t%s", oldp, newp);
-    write_line(msg);
+    if (servers[i].sec[0])
+        snprintf(entry, sizeof entry, "SELECT %s;%s;%s",
+                 servers[i].name, servers[i].ip, servers[i].sec);
+    else
+        snprintf(entry, sizeof entry, "SELECT %s;%s",
+                 servers[i].name, servers[i].ip);
+    write_line(entry);
     return 1;
 }
 
@@ -762,7 +726,7 @@ int main(int argc, char **argv)
         case KEY_ENTER:
             if (sel < nsrv) {
                 if (manage) {
-                    if (do_edit(sel))
+                    if (do_select(sel))
                         return 0;
                     break;
                 }
@@ -780,7 +744,7 @@ int main(int argc, char **argv)
         /* --- клавиши режима управления серверами --- */
         case 'e':
         case 'E':
-            if (manage && sel < nsrv && do_edit(sel))
+            if (manage && sel < nsrv && do_select(sel))
                 return 0;
             break;
         case 'a':
