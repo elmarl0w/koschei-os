@@ -3,7 +3,8 @@
 # FreeRDP 2.11: RDP 7-10 (Windows Server 2008 R2 - 2022), NLA + TLS 1.2.
 #   /f                   — во весь экран в нативном разрешении монитора (KMS)
 #   /dynamic-resolution  — сессия подстраивается при смене разрешения
-#   /printer             — проброс принтеров клиента (CUPS) в сессию
+#   /printer             — проброс принтеров (добавляется ТОЛЬКО если задан
+#                          PRINTER и есть плагин канала, иначе рвёт коннект)
 #   /bpp:16 разгружает старые Атомы; убери, если нужна полная цветность.
 # tc.conf на флешке может предзаполнить логин/домен (/u: /d:) и добавить
 # любые флаги (RDP_EXTRA). Пароль пользователь вводит сам.
@@ -16,7 +17,7 @@ RDP_DOMAIN=$(/usr/bin/tc-getconf RDP_DOMAIN)
 RDP_SEC=$(/usr/bin/tc-getconf RDP_SECURITY)
 RDP_EXTRA=$(/usr/bin/tc-getconf RDP_EXTRA)
 
-set -- /f /v:"$SRV" /cert:ignore /bpp:16 +clipboard /dynamic-resolution /printer
+set -- /f /v:"$SRV" /cert:ignore /bpp:16 +clipboard /dynamic-resolution
 [ -n "$RDP_USER" ]   && set -- "$@" /u:"$RDP_USER"
 [ -n "$RDP_DOMAIN" ] && set -- "$@" /d:"$RDP_DOMAIN"
 # Протокол безопасности: rdp = обычный RDP (без NLA/TLS — как `-sec-nla -sec-tls`),
@@ -24,6 +25,13 @@ set -- /f /v:"$SRV" /cert:ignore /bpp:16 +clipboard /dynamic-resolution /printer
 case "$RDP_SEC" in
     rdp|tls|nla|ext) set -- "$@" /sec:"$RDP_SEC" ;;
 esac
+# Проброс принтера — ТОЛЬКО если принтер настроен И плагин канала собран.
+# ВАЖНО: без libprinter-client.so флаг /printer роняет ВСЁ соединение
+# (rdpdr -> ERRCONNECT_CONNECT_CANCELLED), а не просто отключает печать.
+if [ -n "$(/usr/bin/tc-getconf PRINTER)" ] && \
+   [ -e /usr/lib/freerdp2/libprinter-client.so ]; then
+    set -- "$@" /printer
+fi
 
 # RDP_EXTRA намеренно без кавычек — это набор доп. флагов из tc.conf
 xfreerdp "$@" $RDP_EXTRA
