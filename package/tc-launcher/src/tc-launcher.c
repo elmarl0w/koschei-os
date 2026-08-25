@@ -44,6 +44,7 @@
 struct srv {
     char name[64];
     char ip[64];
+    char sec[8];      /* протокол RDP: rdp/tls/nla или пусто (=глобальный дефолт) */
 };
 
 static struct srv servers[MAXSRV];
@@ -70,17 +71,22 @@ static void load_servers(void)
     if (!f)
         return;
     while (fgets(line, sizeof line, f) && nsrv < MAXSRV) {
-        char *sep;
+        char *sep, *sep2;
 
         line[strcspn(line, "\r\n")] = 0;
         if (!line[0] || line[0] == '#')
             continue;
-        sep = strchr(line, ';');
+        sep = strchr(line, ';');            /* имя;адрес[;протокол] */
         if (!sep || sep == line || !sep[1])
             continue;
         *sep = 0;
+        sep2 = strchr(sep + 1, ';');         /* адрес;протокол */
+        if (sep2)
+            *sep2 = 0;
         snprintf(servers[nsrv].name, sizeof servers[nsrv].name, "%s", line);
         snprintf(servers[nsrv].ip, sizeof servers[nsrv].ip, "%s", sep + 1);
+        snprintf(servers[nsrv].sec, sizeof servers[nsrv].sec, "%s",
+                 sep2 ? sep2 + 1 : "");
         nsrv++;
     }
     fclose(f);
@@ -121,6 +127,25 @@ static void write_choice(const char *fmt, const char *arg1, const char *arg2)
     fprintf(f, fmt, arg1 ? arg1 : "", arg2 ? arg2 : "");
     fputc('\n', f);
     fclose(f);
+}
+
+/* записать готовую строку в /tmp/tc-choice (для полей с 3 частями) */
+static void write_line(const char *s)
+{
+    FILE *f = fopen(OUTFILE, "w");
+
+    if (!f)
+        return;
+    fputs(s, f);
+    fputc('\n', f);
+    fclose(f);
+}
+
+/* протокол сервера: допустимы только rdp/tls/nla, иначе пусто (=дефолт) */
+static void norm_sec(char *s)
+{
+    if (strcmp(s, "rdp") && strcmp(s, "tls") && strcmp(s, "nla"))
+        s[0] = 0;
 }
 
 /* сервисные кнопки — вертикальным столбиком внизу. Главный экран — только
@@ -203,14 +228,19 @@ static void draw(int sel)
     }
 
     for (i = 0; i < nsrv; i++) {
+        char ipdisp[80];
+
         y = top + i;
+        if (servers[i].sec[0])           /* показать протокол, если задан */
+            snprintf(ipdisp, sizeof ipdisp, "%s [%s]", servers[i].ip, servers[i].sec);
+        else
+            snprintf(ipdisp, sizeof ipdisp, "%s", servers[i].ip);
         attrset(COLOR_PAIR(i == sel ? C_SEL : C_NORM));
         mvhline(y, x0, ' ', LIST_W);
         mvaddnstr(y, x0 + 1, servers[i].name, NAME_W);
         if (i != sel)
             attrset(COLOR_PAIR(C_IP));
-        mvaddstr(y, x0 + LIST_W - (int)strlen(servers[i].ip) - 1,
-                 servers[i].ip);
+        mvaddstr(y, x0 + LIST_W - (int)strlen(ipdisp) - 1, ipdisp);
     }
 
     /* слот "+ Add server" — только в режиме управления серверами */
@@ -277,16 +307,21 @@ static void strip_bad(char *s)
 
 static int do_add(void)
 {
-    char name[64], ip[64];
+    char name[64], ip[64], sec[8] = "";
+    char entry[144];
 
     if (prompt("Server name:", name, sizeof name, 0) &&
         prompt("IP address (ip or ip:port):", ip, sizeof ip, 0)) {
+        prompt("Security rdp/tls/nla (empty = default):", sec, sizeof sec, 1);
         strip_bad(name);
         strip_bad(ip);
+        strip_bad(sec);
+        norm_sec(sec);
         if (!name[0] || !ip[0])
             return 0;
         endwin();
-        write_choice("ADD %s;%s", name, ip);
+        snprintf(entry, sizeof entry, "ADD %s;%s;%s", name, ip, sec);
+        write_line(entry);
         return 1;
     }
     return 0;
@@ -296,25 +331,38 @@ static int do_add(void)
  * Пишем "EDIT old_name;old_ip \t new_name;new_ip" (tab-разделитель). */
 static int do_edit(int i)
 {
-    char name[64] = "", ip[64] = "";
-    char lbl1[128], lbl2[128], oldp[136], newp[136];
+    char name[64] = "", ip[64] = "", sec[8] = "";
+    char lbl1[128], lbl2[128], lbl3[128], oldp[136], newp[160], msg[320];
 
     snprintf(lbl1, sizeof lbl1, "New name [%s]:", servers[i].name);
     snprintf(lbl2, sizeof lbl2, "New IP [%s]:", servers[i].ip);
+    snprintf(lbl3, sizeof lbl3, "Security [%s] (rdp/tls/nla, - to clear):",
+             servers[i].sec[0] ? servers[i].sec : "default");
     if (!prompt(lbl1, name, sizeof name, 1))
         return 0;
     if (!prompt(lbl2, ip, sizeof ip, 1))
         return 0;
+    prompt(lbl3, sec, sizeof sec, 1);
     strip_bad(name);
     strip_bad(ip);
+    strip_bad(sec);
     if (!name[0])
         snprintf(name, sizeof name, "%s", servers[i].name);
     if (!ip[0])
         snprintf(ip, sizeof ip, "%s", servers[i].ip);
+    /* протокол: пусто = оставить старый; "-" = очистить; иначе новый (валидный) */
+    if (!sec[0])
+        snprintf(sec, sizeof sec, "%s", servers[i].sec);
+    else if (!strcmp(sec, "-"))
+        sec[0] = 0;
+    else
+        norm_sec(sec);
+    /* ключ (для поиска строки) — 2 поля имя;адрес; новое значение — 3 поля */
     snprintf(oldp, sizeof oldp, "%s;%s", servers[i].name, servers[i].ip);
-    snprintf(newp, sizeof newp, "%s;%s", name, ip);
+    snprintf(newp, sizeof newp, "%s;%s;%s", name, ip, sec);
     endwin();
-    write_choice("EDIT %s\t%s", oldp, newp);
+    snprintf(msg, sizeof msg, "EDIT %s\t%s", oldp, newp);
+    write_line(msg);
     return 1;
 }
 

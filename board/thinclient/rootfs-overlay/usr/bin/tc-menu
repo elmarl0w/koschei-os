@@ -60,12 +60,14 @@ wait_for_ip() {
     printf '\n'
 }
 
-save_server() {
+save_server() {   # $1=имя $2=адрес $3=протокол(опц.)
     # формат не должен ломаться, что бы ни пришло: точки с запятой и
     # переводы строк из полей выкидываем
     name=$(printf '%s' "$1" | tr -d ';\r\n')
     addr=$(printf '%s' "$2" | tr -d ';\r\n ')
+    sec=$(printf '%s' "$3"  | tr -d ';\r\n ')
     [ -n "$name" ] && [ -n "$addr" ] || return
+    if [ -n "$sec" ]; then row="$name;$addr;$sec"; else row="$name;$addr"; fi
 
     mount -o remount,rw /mnt/flash 2>/dev/null
     # если файл не кончается переводом строки — новая запись приклеится
@@ -73,7 +75,7 @@ save_server() {
     if [ -s "$CONF" ] && [ -n "$(tail -c1 "$CONF" 2>/dev/null)" ]; then
         printf '\r\n' >> "$CONF" 2>/dev/null
     fi
-    if printf '%s;%s\r\n' "$name" "$addr" >> "$CONF" 2>/dev/null; then
+    if printf '%s\r\n' "$row" >> "$CONF" 2>/dev/null; then
         sync
     else
         clear
@@ -86,8 +88,13 @@ save_server() {
 
 # Перезаписать servers.conf: строку, ТОЧНО совпадающую с $1, заменить на $2
 # (пусто → удалить). Остальные строки (в т.ч. комментарии) сохраняются как есть.
+# ключ сервера — первые два поля строки «имя;адрес» (без CR); 3-е поле
+# (протокол) в ключ не входит, чтобы delete/edit находили строку независимо
+# от того, задан у сервера протокол или нет.
+_key2() { printf '%s' "$1" | tr -d '\r' | cut -d';' -f1-2; }
+
 _rewrite_conf() {
-    old=$1; new=$2
+    old=$1; new=$2        # old = ключ «имя;адрес»; new = полная строка или пусто
     [ -f "$CONF" ] || return
     if ! mount -o remount,rw /mnt/flash 2>/dev/null; then
         clear
@@ -95,10 +102,10 @@ _rewrite_conf() {
         sleep 2
         return
     fi
+    oldk=$(_key2 "$old")
     tmp="$CONF.tmp"
     while IFS= read -r ln || [ -n "$ln" ]; do
-        cur=$(printf '%s' "$ln" | tr -d '\r')
-        if [ "$cur" = "$old" ]; then
+        if [ "$(_key2 "$ln")" = "$oldk" ]; then
             [ -n "$new" ] && printf '%s\r\n' "$new"
         else
             printf '%s\n' "$ln"
@@ -108,8 +115,8 @@ _rewrite_conf() {
     mount -o remount,ro /mnt/flash 2>/dev/null
 }
 
-delete_server() { _rewrite_conf "$1" ""; }      # $1 = "name;ip"
-edit_server()   { _rewrite_conf "$1" "$2"; }     # $1 = старое, $2 = новое
+delete_server() { _rewrite_conf "$1" ""; }      # $1 = ключ "name;ip"
+edit_server()   { _rewrite_conf "$1" "$2"; }     # $1 = ключ, $2 = новая строка
 
 # Раздел Settings (управление серверами, сеть/RDP, принтер, диагностика,
 # консоль) по умолчанию БЕЗ пароля. Админ может запаролить весь вход в него:
@@ -385,7 +392,7 @@ _sec_summary() {
 
 # выбор протокола безопасности RDP (rdp = без NLA/TLS, как у "проблемных" серверов)
 set_security() {
-    ui_menu "RDP security protocol" \
+    ui_menu "RDP security (default; per-server set in Manage servers)" \
         "auto - negotiate (default)" \
         "rdp  - plain, no NLA/TLS" \
         "tls  - TLS only" \
@@ -405,7 +412,7 @@ rdp_defaults_menu() {
         ui_menu "RDP defaults" \
             "Login${TAB}$($GET RDP_USER)" \
             "Domain${TAB}$($GET RDP_DOMAIN)" \
-            "Security${TAB}$(_sec_summary)" \
+            "Security (default)${TAB}$(_sec_summary)" \
             "Autoconnect${TAB}$($GET AUTOCONNECT)"
         case "$UICHOICE" in
             0) set_key RDP_USER    "Default RDP login" ;;
@@ -470,10 +477,12 @@ manage_loop() {
         a=$(cat "$OUT" 2>/dev/null)
         case "$a" in
             ADD\ *)
-                entry=${a#ADD }
+                entry=${a#ADD }              # имя;адрес;протокол
                 name=${entry%%;*}
-                addr=${entry#*;}
-                [ -n "$name" ] && [ -n "$addr" ] && save_server "$name" "$addr"
+                rest=${entry#*;}             # адрес;протокол
+                addr=${rest%%;*}
+                if [ "$rest" = "$addr" ]; then sec=""; else sec=${rest#*;}; fi
+                [ -n "$name" ] && [ -n "$addr" ] && save_server "$name" "$addr" "$sec"
                 ;;
             DELETE\ *)
                 delete_server "${a#DELETE }"

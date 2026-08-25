@@ -12,9 +12,20 @@
 # что подключение не удалось, и показывает экран ошибки.
 
 SRV="$1"
+
+# протокол КОНКРЕТНОГО сервера — 3-е поле его строки в servers.conf
+# (имя;адрес;протокол). Если у сервера не задан — берём глобальный RDP_SECURITY.
+_srv_sec() {   # $1 = адрес
+    awk -F';' -v a="$1" '
+        /^#/ { next }
+        { gsub(/[ \r]/,"",$2); gsub(/[ \r]/,"",$3); if ($2==a) { print $3; exit } }
+    ' /mnt/flash/servers.conf 2>/dev/null
+}
+
 RDP_USER=$(/usr/bin/tc-getconf RDP_USER)
 RDP_DOMAIN=$(/usr/bin/tc-getconf RDP_DOMAIN)
-RDP_SEC=$(/usr/bin/tc-getconf RDP_SECURITY)
+RDP_SEC=$(_srv_sec "$SRV")
+[ -n "$RDP_SEC" ] || RDP_SEC=$(/usr/bin/tc-getconf RDP_SECURITY)
 RDP_EXTRA=$(/usr/bin/tc-getconf RDP_EXTRA)
 
 set -- /f /v:"$SRV" /cert:ignore /bpp:16 +clipboard /dynamic-resolution
