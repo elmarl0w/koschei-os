@@ -329,8 +329,7 @@ _note() { clear; echo "$1"; sleep 2; }
 # ВНИМАНИЕ: весь видимый в меню текст — только латиница: консольный шрифт на
 # tty1 не рисует кириллицу (получается мусор). Комментарии — можно по-русски.
 _rdp_summary() {
-    _u=$($GET RDP_USER); _d=$($GET RDP_DOMAIN)
-    [ -n "$_d" ] && _u="$_d\\$_u"
+    _u=$($GET RDP_USER)
     [ -n "$_u" ] && printf '%s' "$_u" || printf '%s' '-'
 }
 _printer_summary() {
@@ -383,18 +382,17 @@ set_network() {
     esac
 }
 
-# Под-экран «RDP по умолчанию»: логин, домен, автоподключение.
-# Протокол (rdp/tls/nla) НЕ здесь — он привязан к серверу (Manage servers).
+# Под-экран «RDP по умолчанию»: дефолтный логин (если у сервера не задан
+# свой) и автоподключение. Протокол и логин конкретного сервера — в Manage
+# servers. Домена нет: при необходимости пишется в логине (CORP\user).
 rdp_defaults_menu() {
     while true; do
         ui_menu "RDP defaults" \
             "Login${TAB}$($GET RDP_USER)" \
-            "Domain${TAB}$($GET RDP_DOMAIN)" \
             "Autoconnect${TAB}$($GET AUTOCONNECT)"
         case "$UICHOICE" in
-            0) set_key RDP_USER    "Default RDP login" ;;
-            1) set_key RDP_DOMAIN  "Default RDP domain" ;;
-            2) set_key AUTOCONNECT "Autoconnect (IP or comma-separated list)" ;;
+            0) set_key RDP_USER    "Default RDP login (per-server login is set in Manage servers)" ;;
+            1) set_key AUTOCONNECT "Autoconnect (IP or comma-separated list)" ;;
             *) return ;;
         esac
     done
@@ -446,41 +444,46 @@ run_settings() {
 # Пункты выбираются стрелками (ui_menu); протокол — выбором из списка, а не
 # вводом текста. Каждое изменение сразу пишется в servers.conf.
 
-# ввод строки: результат в ASK (пусто = оставить как есть); ;/CR вычищаются
+# ввод строки: результат в ASK (пусто = оставить, '-' = очистить -> ASK_CLEAR=1)
 _ask() {   # $1=подпись  $2=текущее
     clear
     echo "=== $1 ==="
     echo "Current: $2"
-    echo "Empty = keep as is."
+    echo "Empty = keep as is,  '-' = clear (use default)."
     printf "> "
     read -r ASK
     ASK=$(printf '%s' "$ASK" | tr -d ';\r\n')
+    ASK_CLEAR=0
+    [ "$ASK" = "-" ] && { ASK=""; ASK_CLEAR=1; }
 }
 
-# перезаписать строку сервера и обновить локальное состояние редактора
-_apply_server() {   # $1=имя $2=адрес $3=протокол
-    if [ -n "$3" ]; then _row="$1;$2;$3"; else _row="$1;$2"; fi
+# перезаписать строку сервера и обновить локальное состояние редактора.
+# Строка: имя;адрес;протокол;логин — хвостовые пустые поля отрезаем.
+_apply_server() {   # $1=имя $2=адрес $3=протокол $4=логин
+    _row="$1;$2;$3;$4"
+    while [ "${_row%;}" != "$_row" ]; do _row="${_row%;}"; done
     edit_server "$s_name;$s_addr" "$_row"
-    s_name=$1; s_addr=$2; s_sec=$3
+    s_name=$1; s_addr=$2; s_sec=$3; s_user=$4
 }
 
-server_editor() {   # $1=имя $2=адрес $3=протокол
-    s_name=$1; s_addr=$2; s_sec=$3
+server_editor() {   # $1=имя $2=адрес $3=протокол $4=логин
+    s_name=$1; s_addr=$2; s_sec=$3; s_user=$4
     while true; do
         ui_menu "Server: $s_name" \
             "Name${TAB}$s_name" \
             "Address${TAB}$s_addr" \
             "Security${TAB}${s_sec:-auto}" \
+            "Login${TAB}${s_user:-default}" \
             "#" \
             "Delete server"
         case "$UICHOICE" in
             0)
                 _ask "Server name" "$s_name"
-                [ -n "$ASK" ] && _apply_server "$ASK" "$s_addr" "$s_sec"
+                [ -n "$ASK" ] && _apply_server "$ASK" "$s_addr" "$s_sec" "$s_user"
                 ;;
             1)
                 _ask "Address (ip or ip:port)" "$s_addr"
-                [ -n "$ASK" ] && _apply_server "$s_name" "$ASK" "$s_sec"
+                [ -n "$ASK" ] && _apply_server "$s_name" "$ASK" "$s_sec" "$s_user"
                 ;;
             2)
                 ui_menu "Security: $s_name" \
@@ -489,13 +492,21 @@ server_editor() {   # $1=имя $2=адрес $3=протокол
                     "tls  - TLS only" \
                     "nla  - NLA"
                 case "$UICHOICE" in
-                    0) _apply_server "$s_name" "$s_addr" "" ;;
-                    1) _apply_server "$s_name" "$s_addr" "rdp" ;;
-                    2) _apply_server "$s_name" "$s_addr" "tls" ;;
-                    3) _apply_server "$s_name" "$s_addr" "nla" ;;
+                    0) _apply_server "$s_name" "$s_addr" ""    "$s_user" ;;
+                    1) _apply_server "$s_name" "$s_addr" "rdp" "$s_user" ;;
+                    2) _apply_server "$s_name" "$s_addr" "tls" "$s_user" ;;
+                    3) _apply_server "$s_name" "$s_addr" "nla" "$s_user" ;;
                 esac
                 ;;
             3)
+                # логин этого сервера; домен, если нужен, пишется прямо тут:
+                # CORP\user или user@corp.local
+                _ask "Login for this server (default: $($GET RDP_USER))" "${s_user:-default}"
+                if [ -n "$ASK" ] || [ "$ASK_CLEAR" = 1 ]; then
+                    _apply_server "$s_name" "$s_addr" "$s_sec" "$ASK"
+                fi
+                ;;
+            4)
                 clear
                 printf 'Delete server "%s" (%s)?  y = delete: ' "$s_name" "$s_addr"
                 read -r yn
@@ -529,12 +540,12 @@ manage_loop() {
                 [ -n "$name" ] && [ -n "$addr" ] && save_server "$name" "$addr" ""
                 ;;
             SELECT\ *)
-                entry=${a#SELECT }           # имя;адрес[;протокол]
-                name=${entry%%;*}
-                rest=${entry#*;}
-                addr=${rest%%;*}
-                if [ "$rest" = "$addr" ]; then sec=""; else sec=${rest#*;}; fi
-                [ -n "$name" ] && [ -n "$addr" ] && server_editor "$name" "$addr" "$sec"
+                entry=${a#SELECT }           # имя;адрес;протокол;логин (4 поля)
+                name=$(printf '%s' "$entry" | cut -d';' -f1)
+                addr=$(printf '%s' "$entry" | cut -d';' -f2)
+                sec=$(printf '%s' "$entry" | cut -d';' -f3)
+                usr=$(printf '%s' "$entry" | cut -d';' -f4)
+                [ -n "$name" ] && [ -n "$addr" ] && server_editor "$name" "$addr" "$sec" "$usr"
                 ;;
             DELETE\ *)
                 delete_server "${a#DELETE }"

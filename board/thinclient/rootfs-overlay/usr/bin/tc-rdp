@@ -5,9 +5,9 @@
 #   tc-rdp -v <ip[:port]>     подробный лог FreeRDP (/log-level:DEBUG)
 #   tc-rdp -n <ip[:port]>     dry-run: показать команду и проверки, не подключаться
 #
-# Собирает ТУ ЖЕ команду, что и меню (tc-session): дефолты из tc.conf
-# (RDP_USER/RDP_DOMAIN/RDP_EXTRA), протокол — из 3-го поля строки сервера в
-# servers.conf. Перед стартом показывает команду и TCP-проверку порта.
+# Собирает ТУ ЖЕ команду, что и меню (tc-session): протокол и логин — из
+# строки сервера в servers.conf (имя;адрес;протокол;логин), дефолтный логин
+# и RDP_EXTRA — из tc.conf. Перед стартом показывает команду и TCP-проверку.
 # Лог сессии: /tmp/tc-rdp.log (хвост печатается после выхода).
 # Запускать с локальной консоли (Settings -> Console); по SSH X может не
 # подняться (нужен свободный VT).
@@ -37,19 +37,20 @@ SRV="$1"
 shift
 EXTRAS="$*"          # доп. флаги пользователя (после адреса)
 
-# протокол этого сервера — 3-е поле его строки (имя;адрес;протокол)
-SEC=$(awk -F';' -v a="$SRV" '
-    /^#/ { next }
-    { gsub(/[ \r]/,"",$2); gsub(/[ \r]/,"",$3); if ($2==a) { print $3; exit } }
-' "$CONF" 2>/dev/null)
-
-RDP_USER=$(/usr/bin/tc-getconf RDP_USER)
-RDP_DOMAIN=$(/usr/bin/tc-getconf RDP_DOMAIN)
+# поля этого сервера из servers.conf: 3=протокол, 4=логин
+_srv_field() {   # $1 = адрес, $2 = номер поля
+    awk -F';' -v a="$1" -v n="$2" '
+        /^#/ { next }
+        { gsub(/[ \r]/,"",$2); if ($2==a) { gsub(/\r/,"",$n); print $n; exit } }
+    ' "$CONF" 2>/dev/null
+}
+SEC=$(_srv_field "$SRV" 3)
+RDP_USER=$(_srv_field "$SRV" 4)
+[ -n "$RDP_USER" ] || RDP_USER=$(/usr/bin/tc-getconf RDP_USER)
 RDP_EXTRA=$(/usr/bin/tc-getconf RDP_EXTRA)
 
 set -- /f /v:"$SRV" /cert:ignore /bpp:16 +clipboard /dynamic-resolution
 [ -n "$RDP_USER" ]   && set -- "$@" /u:"$RDP_USER"
-[ -n "$RDP_DOMAIN" ] && set -- "$@" /d:"$RDP_DOMAIN"
 case "$SEC" in
     rdp|tls|nla|ext) set -- "$@" /sec:"$SEC" ;;
 esac
@@ -61,6 +62,7 @@ fi
 
 echo ">> server:    $SRV"
 echo ">> security:  ${SEC:-auto (negotiate)}"
+echo ">> login:     ${RDP_USER:-<ask at logon>}"
 echo ">> command:   xfreerdp $* $RDP_EXTRA $EXTRAS"
 
 # TCP-проверка порта — диагностика (подключаться пробуем в любом случае)

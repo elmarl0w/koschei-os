@@ -15,7 +15,8 @@
  *   POWEROFF                выключение
  * Режим управления серверами (--manage, вызывается из Settings через tc-menu):
  *   ADD <name>;<ip>         добавить сервер в servers.conf
- *   SELECT <name>;<ip>[;<sec>]  открыть экран настроек сервера (рисует tc-menu)
+ *   SELECT <name>;<ip>;<sec>;<user>;<dom>  открыть экран настроек сервера
+ *                           (всегда 5 полей; сам экран рисует tc-menu)
  *   DELETE <name>;<ip>      удалить сервер
  *   BACK                    выйти из экрана управления
  * Обобщённое меню (--menu <title> <file>, для экранов настроек tc-menu):
@@ -44,7 +45,9 @@
 struct srv {
     char name[64];
     char ip[64];
-    char sec[8];      /* протокол RDP: rdp/tls/nla или пусто (=глобальный дефолт) */
+    char sec[8];      /* протокол RDP: rdp/tls/nla или пусто (=авто) */
+    char user[64];    /* логин этого сервера (пусто = дефолт из tc.conf) */
+    char dom[64];     /* домен этого сервера (пусто = дефолт из tc.conf) */
 };
 
 static struct srv servers[MAXSRV];
@@ -71,22 +74,30 @@ static void load_servers(void)
     if (!f)
         return;
     while (fgets(line, sizeof line, f) && nsrv < MAXSRV) {
-        char *sep, *sep2;
+        char *fld[5] = { 0 };
+        char *p;
+        int nf = 1;
 
         line[strcspn(line, "\r\n")] = 0;
         if (!line[0] || line[0] == '#')
             continue;
-        sep = strchr(line, ';');            /* имя;адрес[;протокол] */
-        if (!sep || sep == line || !sep[1])
+        /* имя;адрес[;протокол][;логин][;домен] — режем на поля по ';' */
+        fld[0] = line;
+        for (p = line; *p && nf < 5; p++)
+            if (*p == ';') {
+                *p = 0;
+                fld[nf++] = p + 1;
+            }
+        if (nf < 2 || !fld[0][0] || !fld[1][0])
             continue;
-        *sep = 0;
-        sep2 = strchr(sep + 1, ';');         /* адрес;протокол */
-        if (sep2)
-            *sep2 = 0;
-        snprintf(servers[nsrv].name, sizeof servers[nsrv].name, "%s", line);
-        snprintf(servers[nsrv].ip, sizeof servers[nsrv].ip, "%s", sep + 1);
-        snprintf(servers[nsrv].sec, sizeof servers[nsrv].sec, "%s",
-                 sep2 ? sep2 + 1 : "");
+        snprintf(servers[nsrv].name, sizeof servers[nsrv].name, "%s", fld[0]);
+        snprintf(servers[nsrv].ip,   sizeof servers[nsrv].ip,   "%s", fld[1]);
+        snprintf(servers[nsrv].sec,  sizeof servers[nsrv].sec,  "%s",
+                 fld[2] ? fld[2] : "");
+        snprintf(servers[nsrv].user, sizeof servers[nsrv].user, "%s",
+                 fld[3] ? fld[3] : "");
+        snprintf(servers[nsrv].dom,  sizeof servers[nsrv].dom,  "%s",
+                 fld[4] ? fld[4] : "");
         nsrv++;
     }
     fclose(f);
@@ -321,15 +332,13 @@ static int do_add(void)
  * удаление) рисует tc-menu — мы лишь сообщаем, какой сервер выбран */
 static int do_select(int i)
 {
-    char entry[176];
+    char entry[352];
 
     endwin();
-    if (servers[i].sec[0])
-        snprintf(entry, sizeof entry, "SELECT %s;%s;%s",
-                 servers[i].name, servers[i].ip, servers[i].sec);
-    else
-        snprintf(entry, sizeof entry, "SELECT %s;%s",
-                 servers[i].name, servers[i].ip);
+    /* всегда 5 полей — разбор в tc-menu детерминированный */
+    snprintf(entry, sizeof entry, "SELECT %s;%s;%s;%s;%s",
+             servers[i].name, servers[i].ip, servers[i].sec,
+             servers[i].user, servers[i].dom);
     write_line(entry);
     return 1;
 }
