@@ -14,7 +14,7 @@
 SRV="$1"
 
 # протокол КОНКРЕТНОГО сервера — 3-е поле его строки в servers.conf
-# (имя;адрес;протокол). Если у сервера не задан — берём глобальный RDP_SECURITY.
+# (имя;адрес;протокол). Протокол привязан к серверу; пусто = авто-согласование.
 _srv_sec() {   # $1 = адрес
     awk -F';' -v a="$1" '
         /^#/ { next }
@@ -24,8 +24,7 @@ _srv_sec() {   # $1 = адрес
 
 RDP_USER=$(/usr/bin/tc-getconf RDP_USER)
 RDP_DOMAIN=$(/usr/bin/tc-getconf RDP_DOMAIN)
-RDP_SEC=$(_srv_sec "$SRV")
-[ -n "$RDP_SEC" ] || RDP_SEC=$(/usr/bin/tc-getconf RDP_SECURITY)
+RDP_SEC=$(_srv_sec "$SRV")               # протокол берётся ТОЛЬКО у сервера
 RDP_EXTRA=$(/usr/bin/tc-getconf RDP_EXTRA)
 
 set -- /f /v:"$SRV" /cert:ignore /bpp:16 +clipboard /dynamic-resolution

@@ -357,9 +357,13 @@ static int do_edit(int i)
         sec[0] = 0;
     else
         norm_sec(sec);
-    /* ключ (для поиска строки) — 2 поля имя;адрес; новое значение — 3 поля */
+    /* ключ (для поиска строки) — 2 поля имя;адрес; новое значение — 3 поля
+     * (без хвостовой ';', если протокол пуст) */
     snprintf(oldp, sizeof oldp, "%s;%s", servers[i].name, servers[i].ip);
-    snprintf(newp, sizeof newp, "%s;%s;%s", name, ip, sec);
+    if (sec[0])
+        snprintf(newp, sizeof newp, "%s;%s;%s", name, ip, sec);
+    else
+        snprintf(newp, sizeof newp, "%s;%s", name, ip);
     endwin();
     snprintf(msg, sizeof msg, "EDIT %s\t%s", oldp, newp);
     write_line(msg);

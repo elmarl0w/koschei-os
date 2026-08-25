@@ -384,41 +384,17 @@ set_network() {
 }
 
 # Под-экран «RDP по умолчанию»: логин, домен, автоподключение.
-# сводка протокола RDP для правой колонки (пусто -> auto)
-_sec_summary() {
-    _s=$($GET RDP_SECURITY)
-    [ -n "$_s" ] && printf '%s' "$_s" || printf 'auto'
-}
-
-# выбор протокола безопасности RDP (rdp = без NLA/TLS, как у "проблемных" серверов)
-set_security() {
-    ui_menu "RDP security (default; per-server set in Manage servers)" \
-        "auto - negotiate (default)" \
-        "rdp  - plain, no NLA/TLS" \
-        "tls  - TLS only" \
-        "nla  - NLA"
-    case "$UICHOICE" in
-        0) _val="" ;;
-        1) _val="rdp" ;;
-        2) _val="tls" ;;
-        3) _val="nla" ;;
-        *) return ;;
-    esac
-    $SET RDP_SECURITY "$_val" || _note "Not saved (read-only media?)"
-}
-
+# Протокол (rdp/tls/nla) НЕ здесь — он привязан к серверу (Manage servers).
 rdp_defaults_menu() {
     while true; do
         ui_menu "RDP defaults" \
             "Login${TAB}$($GET RDP_USER)" \
             "Domain${TAB}$($GET RDP_DOMAIN)" \
-            "Security (default)${TAB}$(_sec_summary)" \
             "Autoconnect${TAB}$($GET AUTOCONNECT)"
         case "$UICHOICE" in
             0) set_key RDP_USER    "Default RDP login" ;;
             1) set_key RDP_DOMAIN  "Default RDP domain" ;;
-            2) set_security ;;
-            3) set_key AUTOCONNECT "Autoconnect (IP or comma-separated list)" ;;
+            2) set_key AUTOCONNECT "Autoconnect (IP or comma-separated list)" ;;
             *) return ;;
         esac
     done

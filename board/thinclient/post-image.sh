@@ -45,8 +45,9 @@ gen_seed() {
         # tc.conf (активный) — только непустые ключи
         : > "$SEED/tc.conf"
         # HOSTNAME намеренно не запекаем — имя хоста присваивается само (tc-<mac>)
+        # протокол RDP не глобальный — он 3-м полем в строке сервера (SERVERS)
         for k in STATIC_IP GATEWAY DNS NTP_SERVER KEYMAP WAIT_FOR_IP \
-                 RDP_USER RDP_DOMAIN RDP_SECURITY RDP_EXTRA AUTOCONNECT \
+                 RDP_USER RDP_DOMAIN RDP_EXTRA AUTOCONNECT \
                  PRINTER PRINTER_NAME; do
             eval "v=\${$k:-}"
             [ -n "$v" ] && printf '%s=%s\r\n' "$k" "$v" >> "$SEED/tc.conf"

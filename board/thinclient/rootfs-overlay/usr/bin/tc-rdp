@@ -1,0 +1,92 @@
+#!/bin/sh
+# tc-rdp — подключение к RDP из консоли, для отладки.
+#
+#   tc-rdp <ip[:port]> [доп-флаги xfreerdp...]
+#   tc-rdp -v <ip[:port]>     подробный лог FreeRDP (/log-level:DEBUG)
+#   tc-rdp -n <ip[:port]>     dry-run: показать команду и проверки, не подключаться
+#
+# Собирает ТУ ЖЕ команду, что и меню (tc-session): дефолты из tc.conf
+# (RDP_USER/RDP_DOMAIN/RDP_EXTRA), протокол — из 3-го поля строки сервера в
+# servers.conf. Перед стартом показывает команду и TCP-проверку порта.
+# Лог сессии: /tmp/tc-rdp.log (хвост печатается после выхода).
+# Запускать с локальной консоли (Settings -> Console); по SSH X может не
+# подняться (нужен свободный VT).
+
+LOG=/tmp/tc-rdp.log
+CONF=/mnt/flash/servers.conf
+
+usage() {
+    echo "usage: tc-rdp [-v|-n] <ip[:port]> [extra xfreerdp flags...]" >&2
+    echo "  -v  verbose FreeRDP log (/log-level:DEBUG)" >&2
+    echo "  -n  dry-run: print command and checks, do not connect" >&2
+    exit 1
+}
+
+VERBOSE=""
+DRY=0
+while [ $# -gt 0 ]; do
+    case "$1" in
+        -v) VERBOSE="/log-level:DEBUG"; shift ;;
+        -n) DRY=1; shift ;;
+        -*) usage ;;
+        *)  break ;;
+    esac
+done
+SRV="$1"
+[ -n "$SRV" ] || usage
+shift
+EXTRAS="$*"          # доп. флаги пользователя (после адреса)
+
+# протокол этого сервера — 3-е поле его строки (имя;адрес;протокол)
+SEC=$(awk -F';' -v a="$SRV" '
+    /^#/ { next }
+    { gsub(/[ \r]/,"",$2); gsub(/[ \r]/,"",$3); if ($2==a) { print $3; exit } }
+' "$CONF" 2>/dev/null)
+
+RDP_USER=$(/usr/bin/tc-getconf RDP_USER)
+RDP_DOMAIN=$(/usr/bin/tc-getconf RDP_DOMAIN)
+RDP_EXTRA=$(/usr/bin/tc-getconf RDP_EXTRA)
+
+set -- /f /v:"$SRV" /cert:ignore /bpp:16 +clipboard /dynamic-resolution
+[ -n "$RDP_USER" ]   && set -- "$@" /u:"$RDP_USER"
+[ -n "$RDP_DOMAIN" ] && set -- "$@" /d:"$RDP_DOMAIN"
+case "$SEC" in
+    rdp|tls|nla|ext) set -- "$@" /sec:"$SEC" ;;
+esac
+if [ -n "$(/usr/bin/tc-getconf PRINTER)" ] && \
+   [ -e /usr/lib/freerdp2/libprinter-client.so ]; then
+    set -- "$@" /printer
+fi
+[ -n "$VERBOSE" ] && set -- "$@" "$VERBOSE"
+
+echo ">> server:    $SRV"
+echo ">> security:  ${SEC:-auto (negotiate)}"
+echo ">> command:   xfreerdp $* $RDP_EXTRA $EXTRAS"
+
+# TCP-проверка порта — диагностика (подключаться пробуем в любом случае)
+H=${SRV%%:*}
+case "$SRV" in *:*) P=${SRV##*:} ;; *) P=3389 ;; esac
+if command -v timeout >/dev/null 2>&1 && [ -x /bin/bash ]; then
+    if timeout 4 /bin/bash -c "exec 3<>/dev/tcp/$H/$P" 2>/dev/null; then
+        echo ">> tcp $H:$P  OPEN"
+    else
+        echo ">> tcp $H:$P  CLOSED/FILTERED (all the same, trying to connect)"
+    fi
+fi
+
+[ "$DRY" = 1 ] && { echo ">> dry-run, not connecting"; exit 0; }
+
+# RDP_EXTRA/EXTRAS намеренно без кавычек — это наборы флагов
+if [ -n "$DISPLAY" ]; then
+    xfreerdp "$@" $RDP_EXTRA $EXTRAS 2>&1 | tee "$LOG"
+    rc=$?
+else
+    echo ">> starting X (log: $LOG) ..."
+    xinit /usr/bin/xfreerdp "$@" $RDP_EXTRA $EXTRAS -- -nolisten tcp >"$LOG" 2>&1
+    rc=$?
+    chvt 1 2>/dev/null
+    echo ">> last log lines:"
+    tail -15 "$LOG"
+fi
+echo ">> xfreerdp exit code: $rc   (full log: $LOG)"
+exit "$rc"

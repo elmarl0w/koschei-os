@@ -10,10 +10,9 @@
 #RDP_USER=ivanov
 #RDP_DOMAIN=CORP
 
-# Протокол безопасности RDP: пусто/auto = согласование (по умолчанию),
-# rdp = обычный RDP без NLA/TLS (сервер с выключенными NLA/TLS),
-# tls = только TLS, nla = только NLA. Меняется и из меню Settings->RDP defaults.
-#RDP_SECURITY=rdp
+# Протокол безопасности RDP задаётся ДЛЯ КАЖДОГО СЕРВЕРА — 3-м полем его
+# строки в servers.conf: имя;адрес;rdp (rdp = без NLA/TLS, tls, nla; пусто =
+# авто). Правится из меню Manage servers, здесь глобального ключа нет.
 
 # Любые доп. флаги xfreerdp (через пробел). Примеры:
 #   /sound:sys:alsa      звук
