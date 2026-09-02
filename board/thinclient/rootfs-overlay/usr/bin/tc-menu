@@ -148,23 +148,23 @@ check_pass() {
 }
 
 open_shell() {
-    # Пароль спрашивается на входе в весь раздел Settings (run_settings),
-    # отдельного гейта на консоль уже не нужно.
+    # Пароль спрашивается на входе в весь раздел Settings (run_settings).
+    # Консоль открывается ПОД ОБЫЧНЫМ пользователем (root — через sudo -i);
+    # имя не хардкодим — берём первого юзера с домом в /home и bash-шеллом
+    # (задаётся в site.env при сборке). Памятка по tc-edit — в profile.d.
     clear
-    echo "=== Linux console (root). Back to menu: exit or Ctrl-D ==="
-    echo "Flash is mounted read-only. To edit files on it use:"
-    echo "  tc-edit            edit servers.conf"
-    echo "  tc-edit <file>     edit any file on /mnt/flash"
-    # HOME обязателен: без него bash -l не найдёт /root/.bash_profile
-    # и останется с голым PS1='# ' из скелетного /etc/profile
-    export HOME=/root
-    cd /root
-    if [ -x /bin/bash ]; then
-        /bin/bash -l
+    TCUSER=$(awk -F: '$6 ~ /^\/home\// && $7 ~ /bash$/ {print $1; exit}' /etc/passwd)
+    if [ -n "$TCUSER" ] && [ -x /bin/su ]; then
+        echo "=== Console ($TCUSER). Back to menu: exit or Ctrl-D ==="
+        su - "$TCUSER"
     else
-        /bin/sh -l
+        # фолбэк: юзера нет (кастомная сборка) — как раньше, root
+        echo "=== Console (root). Back to menu: exit or Ctrl-D ==="
+        export HOME=/root
+        cd /root
+        if [ -x /bin/bash ]; then /bin/bash -l; else /bin/sh -l; fi
+        cd /
     fi
-    cd /
 }
 
 # Быстрая проверка доступности RDP-порта БЕЗ запуска X. Неответивший сервер

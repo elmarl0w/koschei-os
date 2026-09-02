@@ -2,20 +2,90 @@
 # SPDX-License-Identifier: GPL-2.0-or-later
 # Правка файлов на флешке. Она смонтирована read-only (защита FAT от
 # выдёргивания), поэтому: перемонтировать rw -> редактор -> sync -> ro.
-# Использование: tc-edit [файл]    (по умолчанию servers.conf)
+# Запуск не от root — сам перезапускается через sudo (нужен для ремоунта).
+# Видимый текст — латиница (шрифт tty1 не рисует кириллицу).
+
+FLASH=/mnt/flash
+
+usage() {
+    cat <<'EOF'
+tc-edit - edit files on the flash drive (config storage of the thin client)
+
+The flash is normally mounted READ-ONLY so it survives power cuts and
+unplugging. tc-edit remounts it read-write, opens the editor, then syncs
+and returns it to read-only. Do not use a bare editor on /mnt/flash - it
+will fail with "read-only file system".
+
+USAGE:
+  tc-edit                 edit servers.conf (the RDP server list)
+  tc-edit FILE            edit FILE; a relative name means /mnt/flash/FILE
+  tc-edit -l | --list     list files on the flash and exit
+  tc-edit -e CMD FILE     use editor CMD instead of nano (or $EDITOR)
+  tc-edit -h | --help     this help
+
+FILES ON THE FLASH:
+  servers.conf     RDP server list: name;address[:port][;proto][;login]
+                   proto: rdp (plain, no NLA/TLS) | tls | nla; empty = auto
+  tc.conf          client settings: RDP_USER, AUTOCONNECT, STATIC_IP,
+                   NTP_SERVER, KEYMAP, PRINTER, WAIT_FOR_IP, ... (KEY=value;
+                   see tc.conf.sample for every key with comments)
+  tc.conf.sample   documented template for tc.conf
+  shell.pass       sha256 hash; if present, the Settings menu asks for
+                   this password (delete the file if forgotten)
+  authorized_keys  SSH public keys for key-based login
+  root.pass        sha512 hash ($6$...); durable root password override
+  lastsession.log  log of the last FAILED RDP session (written automatically)
+
+EXAMPLES:
+  tc-edit                      # edit the server list
+  tc-edit tc.conf              # edit client settings
+  tc-edit -e vi tc.conf        # same, but with vi
+  tc-edit -l                   # what is on the flash?
+
+NOTES:
+  - on ISO/CD media the flash cannot be remounted rw - editing fails
+  - most tc.conf keys can also be changed from the Settings menu
+  - changes apply on next boot (network keys) or next connect (RDP keys)
+EOF
+}
+
+ED=${EDITOR:-nano}
+LIST=0
+while [ $# -gt 0 ]; do
+    case "$1" in
+        -h|--help) usage; exit 0 ;;
+        -l|--list) LIST=1; shift ;;
+        -e) [ -n "$2" ] || { echo "tc-edit: -e requires an editor command" >&2; exit 1; }
+            ED=$2; shift 2 ;;
+        --) shift; break ;;
+        -*) echo "tc-edit: unknown option '$1' (see tc-edit --help)" >&2; exit 1 ;;
+        *)  break ;;
+    esac
+done
+
+# ремоунт требует root: перезапускаемся через sudo (спросит пароль юзера)
+if [ "$(id -u)" != "0" ]; then
+    [ "$LIST" = 1 ] && set -- --list "$@"
+    exec sudo EDITOR="$ED" "$0" "$@"
+fi
+
+if [ "$LIST" = 1 ]; then
+    ls -l "$FLASH"
+    exit 0
+fi
 
 FILE=${1:-servers.conf}
 case "$FILE" in
     /*) ;;
-    *)  FILE=/mnt/flash/$FILE ;;
+    *)  FILE=$FLASH/$FILE ;;
 esac
 
-if ! mount -o remount,rw /mnt/flash 2>/dev/null; then
-    echo "tc-edit: cannot remount /mnt/flash read-write (ISO/CD media?)" >&2
+if ! mount -o remount,rw "$FLASH" 2>/dev/null; then
+    echo "tc-edit: cannot remount $FLASH read-write (ISO/CD media?)" >&2
     exit 1
 fi
 
-${EDITOR:-nano} "$FILE"
+"$ED" "$FILE"
 sync
-mount -o remount,ro /mnt/flash 2>/dev/null
+mount -o remount,ro "$FLASH" 2>/dev/null
 echo "tc-edit: saved, flash is read-only again"

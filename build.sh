@@ -44,11 +44,11 @@ TC_ROOT_PASSWORD="${TC_ROOT_PASSWORD:-$ROOT_PASSWORD}"
 export TC_ROOT_PASSWORD
 
 # Пользователь для SSH: генерим .site/users.table из site.env (имя/пароль;
-# дефолт user/1234). Пароль: начинается с '$' => готовый хэш (в таблицу как
+# дефолт tcadmin/admin). Пароль: начинается с '$' => готовый хэш (в таблицу как
 # есть), иначе '=текст' => Buildroot зашифрует sha-512. defconfig указывает
 # BR2_ROOTFS_USERS_TABLES на .site/users.table.
-TC_USER_NAME="${USER_NAME:-user}"
-TC_USER_PASSWORD="${USER_PASSWORD:-1234}"
+TC_USER_NAME="${USER_NAME:-tcadmin}"
+TC_USER_PASSWORD="${USER_PASSWORD:-admin}"
 case "$TC_USER_PASSWORD" in
     \$*) _upw="$TC_USER_PASSWORD" ;;    # уже хэш ($6$...)
     *)   _upw="=$TC_USER_PASSWORD" ;;   # открытый текст
