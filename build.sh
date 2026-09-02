@@ -1,4 +1,5 @@
 #!/bin/sh
+# SPDX-License-Identifier: GPL-2.0-or-later
 # Сборка образа тонкого клиента.
 #
 #   ./build.sh              — сборка (на macOS всегда в Docker; на Linux — в Docker,

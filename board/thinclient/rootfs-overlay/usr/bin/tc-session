@@ -1,4 +1,5 @@
 #!/bin/sh
+# SPDX-License-Identifier: GPL-2.0-or-later
 # Запускается внутри X через xinit: единственный клиент X-сервера — полноэкранный RDP.
 # FreeRDP 2.11: RDP 7-10 (Windows Server 2008 R2 - 2022), NLA + TLS 1.2.
 #   /f                   — во весь экран в нативном разрешении монитора (KMS)

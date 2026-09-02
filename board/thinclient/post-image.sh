@@ -1,4 +1,5 @@
 #!/bin/sh
+# SPDX-License-Identifier: GPL-2.0-or-later
 # Запускается Buildroot'ом после сборки образов (внутри Linux-контейнера),
 # либо отдельно: BINARIES_DIR=... ./post-image.sh
 # Собирает два артефакта в $BINARIES_DIR:

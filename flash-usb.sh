@@ -1,4 +1,5 @@
 #!/bin/sh
+# SPDX-License-Identifier: GPL-2.0-or-later
 # Заливка usb.img на флешку. Работает на macOS и Linux.
 #   macOS:  ./flash-usb.sh /dev/diskN   (номер смотри в diskutil list)
 #   Linux:  ./flash-usb.sh /dev/sdX     (смотри в lsblk)

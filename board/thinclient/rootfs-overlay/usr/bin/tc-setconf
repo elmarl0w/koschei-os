@@ -1,4 +1,5 @@
 #!/bin/sh
+# SPDX-License-Identifier: GPL-2.0-or-later
 # Безопасная запись ОДНОГО ключа в /mnt/flash/tc.conf (формат KEY=VALUE).
 # Пара к tc-getconf. Используется экраном настроек (tc-menu SETTINGS).
 # Использование: tc-setconf KEY VALUE

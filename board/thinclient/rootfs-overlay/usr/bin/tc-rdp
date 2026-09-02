@@ -1,4 +1,5 @@
 #!/bin/sh
+# SPDX-License-Identifier: GPL-2.0-or-later
 # tc-rdp — подключение к RDP из консоли, для отладки.
 #
 #   tc-rdp <ip[:port]> [доп-флаги xfreerdp...]

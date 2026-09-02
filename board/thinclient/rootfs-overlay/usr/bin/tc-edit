@@ -1,4 +1,5 @@
 #!/bin/sh
+# SPDX-License-Identifier: GPL-2.0-or-later
 # Правка файлов на флешке. Она смонтирована read-only (защита FAT от
 # выдёргивания), поэтому: перемонтировать rw -> редактор -> sync -> ro.
 # Использование: tc-edit [файл]    (по умолчанию servers.conf)

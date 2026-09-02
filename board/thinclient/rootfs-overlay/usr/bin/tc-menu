@@ -1,4 +1,5 @@
 #!/bin/sh
+# SPDX-License-Identifier: GPL-2.0-or-later
 # Обёртка вокруг tc-launcher (ncurses-интерфейс). Крутится на tty1 вместо
 # getty (см. /etc/inittab): лаунчер рисует UI и пишет выбор в /tmp/tc-choice,
 # здесь выбор исполняется — RDP-сессия, консоль, запись сервера, питание.
