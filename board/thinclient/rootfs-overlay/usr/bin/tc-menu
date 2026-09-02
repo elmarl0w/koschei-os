@@ -199,6 +199,14 @@ run_session() {   # $1 = сервер; rc: 0 ок, 254 недоступен, 255
     # если X умер грязно и оставил VT в графическом режиме — вернуть консоль
     chvt 1 2>/dev/null
     rc=$(cat /tmp/rdp-status 2>/dev/null)
+    # неудачная сессия: лог на флешку — можно вынуть и прочитать на любом компе
+    if [ -n "$rc" ] && [ "$rc" != 0 ]; then
+        if mount -o remount,rw /mnt/flash 2>/dev/null; then
+            cp /var/log/xsession.log /mnt/flash/lastsession.log 2>/dev/null
+            sync
+            mount -o remount,ro /mnt/flash 2>/dev/null
+        fi
+    fi
     [ -n "$rc" ] || rc=255
     return "$rc"
 }

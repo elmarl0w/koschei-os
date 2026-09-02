@@ -34,6 +34,13 @@ set -- /f /v:"$SRV" /cert:ignore /bpp:16 +clipboard /dynamic-resolution
 case "$RDP_SEC" in
     rdp|tls|nla|ext) set -- "$@" /sec:"$RDP_SEC" ;;
 esac
+# Легаси-серверы (обычный RDP security — старые Windows): без этих флагов
+# сессия ОТКРЫВАЕТСЯ, но рвётся при первом вводе (мышь/клавиатура вызывают
+# отрисовку, сервер шлёт старые draw-orders/глифы, строгая проверка FreeRDP
+# их бракует -> disconnect). Канонический фикс FreeRDP для 2003/2008-эпохи.
+if [ "$RDP_SEC" = "rdp" ]; then
+    set -- "$@" /relax-order-checks +glyph-cache
+fi
 # Проброс принтера — ТОЛЬКО если принтер настроен И плагин канала собран.
 # ВАЖНО: без libprinter-client.so флаг /printer роняет ВСЁ соединение
 # (rdpdr -> ERRCONNECT_CONNECT_CANCELLED), а не просто отключает печать.

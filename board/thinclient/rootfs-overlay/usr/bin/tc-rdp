@@ -54,6 +54,10 @@ set -- /f /v:"$SRV" /cert:ignore /bpp:16 +clipboard /dynamic-resolution
 case "$SEC" in
     rdp|tls|nla|ext) set -- "$@" /sec:"$SEC" ;;
 esac
+# легаси-серверы: без этого сессия рвётся при первом вводе (см. tc-session)
+case "$SEC" in
+    rdp) set -- "$@" /relax-order-checks +glyph-cache ;;
+esac
 if [ -n "$(/usr/bin/tc-getconf PRINTER)" ] && \
    [ -e /usr/lib/freerdp2/libprinter-client.so ]; then
     set -- "$@" /printer
