@@ -8,7 +8,7 @@ BR2_TOOLCHAIN_BUILDROOT_GLIBC=y
 BR2_TOOLCHAIN_BUILDROOT_CXX=y
 
 BR2_TARGET_GENERIC_HOSTNAME="thinclient"
-BR2_TARGET_GENERIC_ISSUE="Thin client"
+BR2_TARGET_GENERIC_ISSUE="KoscheiOS"
 # Пароль root (SSH + логин на tty2). ВНИМАНИЕ: значение ниже — НЕБЕЗОПАСНАЯ
 # заглушка «CHANGE THIS», не рабочий пароль. Задавай свой при сборке:
 #   TC_ROOT_PASSWORD='свой-пароль' ./build.sh   (durable, вписывается в образ)
