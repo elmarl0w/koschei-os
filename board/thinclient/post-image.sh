@@ -23,6 +23,8 @@ gen_seed() {
     rm -rf "$SEED"; mkdir -p "$SEED"
     cp "$BOARD_DIR/servers.conf.sample" "$SEED/servers.conf"
     cp "$BOARD_DIR/tc.conf.sample"      "$SEED/tc.conf.sample"
+    # syslinux.cfg тоже через seed: site.env может переключить DEFAULT (kms|safe)
+    cp "$BOARD_DIR/syslinux.cfg"        "$SEED/syslinux.cfg"
     [ -f "$SITE_ENV" ] || return 0
     echo ">>> site.env: запекаю конфиг площадки в образ" >&2
     (
@@ -50,11 +52,18 @@ gen_seed() {
         # RDP_USER здесь лишь дефолт-фолбэк; домена нет (пишется в логине)
         for k in STATIC_IP GATEWAY DNS NTP_SERVER KEYMAP WAIT_FOR_IP \
                  RDP_USER RDP_EXTRA AUTOCONNECT \
-                 PRINTER PRINTER_NAME; do
+                 PRINTER PRINTER_NAME XDRIVER; do
             eval "v=\${$k:-}"
             [ -n "$v" ] && printf '%s=%s\r\n' "$k" "$v" >> "$SEED/tc.conf"
         done
         [ -s "$SEED/tc.conf" ] || rm -f "$SEED/tc.conf"
+        # режим ядра: VIDEO_MODE=safe -> DEFAULT safe в syslinux.cfg (nomodeset)
+        case "${VIDEO_MODE:-}" in
+            safe|kms) sed -i "s/^DEFAULT .*/DEFAULT $VIDEO_MODE/" "$SEED/syslinux.cfg"
+                      echo ">>> site.env: VIDEO_MODE=$VIDEO_MODE (DEFAULT в syslinux.cfg)" >&2 ;;
+            '') ;;
+            *)  echo "!!! site.env: VIDEO_MODE='$VIDEO_MODE' не kms|safe — игнорирую" >&2 ;;
+        esac
         # shell.pass (пароль на Settings): готовый sha256 (64 hex) или текст
         if [ -n "${SETTINGS_PASSWORD:-}" ]; then
             if printf '%s' "$SETTINGS_PASSWORD" | grep -qiE '^[0-9a-f]{64}$'; then
@@ -125,7 +134,7 @@ build_img() {
     mkfs.vfat -F 32 -g 255/63 -h 2048 -n THINCLIENT "$PART" >/dev/null
     mcopy -i "$PART" "$BINARIES_DIR/bzImage"          ::/bzImage
     mcopy -i "$PART" "$BINARIES_DIR/rootfs.cpio.gz"   ::/initrd.gz
-    mcopy -i "$PART" "$BOARD_DIR/syslinux.cfg"        ::/syslinux.cfg
+    mcopy -i "$PART" "$SEED/syslinux.cfg"        ::/syslinux.cfg
     mcopy -i "$PART" "$SEED/servers.conf"             ::/servers.conf
     mcopy -i "$PART" "$SEED/tc.conf.sample"           ::/tc.conf.sample
     [ -f "$SEED/tc.conf" ]    && mcopy -i "$PART" "$SEED/tc.conf"    ::/tc.conf
@@ -182,7 +191,7 @@ build_iso() {
     cp "$SEED/tc.conf.sample"           "$ISO_DIR/tc.conf.sample"
     [ -f "$SEED/tc.conf" ]    && cp "$SEED/tc.conf"    "$ISO_DIR/tc.conf"
     [ -f "$SEED/shell.pass" ] && cp "$SEED/shell.pass" "$ISO_DIR/shell.pass"
-    cp "$BOARD_DIR/syslinux.cfg"        "$ISO_DIR/isolinux/isolinux.cfg"
+    cp "$SEED/syslinux.cfg"        "$ISO_DIR/isolinux/isolinux.cfg"
     cp "$ISOLINUX_BIN"                  "$ISO_DIR/isolinux/"
     [ -n "$LDLINUX" ] && cp "$LDLINUX"  "$ISO_DIR/isolinux/"
 

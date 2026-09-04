@@ -89,6 +89,8 @@ if [ -n "$DISPLAY" ]; then
     rc=$?
 else
     echo ">> starting X (log: $LOG) ..."
+    XDRV=$(/usr/bin/tc-xconf 2>/dev/null)
+    echo ">> xdriver:   $XDRV (kms=$([ -e /dev/dri/card0 ] && echo yes || echo no), fb0=$(cat /sys/class/graphics/fb0/name 2>/dev/null || echo none))"
     xinit /usr/bin/xfreerdp "$@" $RDP_EXTRA $EXTRAS -- -nolisten tcp >"$LOG" 2>&1
     rc=$?
     chvt 1 2>/dev/null

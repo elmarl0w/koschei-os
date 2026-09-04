@@ -1,0 +1,71 @@
+#!/bin/sh
+# SPDX-License-Identifier: GPL-2.0-or-later
+# Выбор X-видеодрайвера ПЕРЕД стартом X (вызывается из tc-menu и tc-rdp).
+# Пишет /etc/X11/xorg.conf.d/20-device.conf (rootfs в RAM — писать можно) и
+# печатает выбранный режим.
+#
+# Ключ tc.conf: XDRIVER=auto|modesetting|intel|fbdev (пусто = auto).
+#   auto        — есть /dev/dri/card0 (KMS поднялся) -> modesetting, иначе fbdev
+#   modesetting — штатный KMS-драйвер (нативное разрешение), без ускорения,
+#                 софт-курсор
+#   intel       — xf86-video-intel (UXA): альтернативный путь для старых
+#                 Intel GMA, если modesetting виснет, а нативное разрешение
+#                 хочется сохранить
+#   fbdev       — X рисует в /dev/fb0 без единой GPU-команды: поверх i915
+#                 (fbdev-эмуляция DRM) или VESA (ядро с nomodeset — режим
+#                 "safe" в syslinux.cfg). Самый живучий вариант: GPU нечем
+#                 повесить. Цена — скорость и, при nomodeset, VESA-разрешение.
+#
+# Зачем: на Intel Pineview/GMA3150 (Atom D4xx/D5xx) i915 KMS виснет намертво
+# при работе с экраном; ThinStation на том же железе живёт именно без него.
+
+OUT=/etc/X11/xorg.conf.d/20-device.conf
+MODE=$(/usr/bin/tc-getconf XDRIVER 2>/dev/null)
+case "$MODE" in
+    modesetting|intel|fbdev) ;;
+    *) MODE=auto ;;
+esac
+if [ "$MODE" = auto ]; then
+    if [ -e /dev/dri/card0 ]; then MODE=modesetting; else MODE=fbdev; fi
+fi
+# fbdev без /dev/fb0 не взлетит (KMS без fbdev-эмуляции) — тогда modesetting
+if [ "$MODE" = fbdev ] && [ ! -e /dev/fb0 ] && [ -e /dev/dri/card0 ]; then
+    MODE=modesetting
+fi
+
+mkdir -p "$(dirname "$OUT")"
+case "$MODE" in
+    modesetting)
+        cat > "$OUT" <<'EOF'
+Section "Device"
+    Identifier "gpu"
+    Driver "modesetting"
+    Option "AccelMethod" "none"
+    Option "SWcursor" "true"
+EndSection
+EOF
+        ;;
+    intel)
+        cat > "$OUT" <<'EOF'
+Section "Device"
+    Identifier "gpu"
+    Driver "intel"
+    Option "AccelMethod" "uxa"
+    Option "SWcursor" "true"
+    Option "DRI" "false"
+    Option "TearFree" "false"
+EndSection
+EOF
+        ;;
+    fbdev)
+        cat > "$OUT" <<'EOF'
+Section "Device"
+    Identifier "gpu"
+    Driver "fbdev"
+    Option "fbdev" "/dev/fb0"
+    Option "ShadowFB" "true"
+EndSection
+EOF
+        ;;
+esac
+echo "$MODE"

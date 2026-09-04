@@ -115,6 +115,11 @@ ncurses-лаунчер · Xorg (поднимается только на вре�
   - `NTP_SERVER=<ip>` — синхронизация времени (нужна для RDP-логина: NLA
     падает при кривых часах). `KEYMAP=<us|ru|…>` — раскладка консоли для
     tty2 (RDP-раскладку задавай через `RDP_EXTRA`, напр. `/kbd:...`).
+  - `XDRIVER=<auto|modesetting|intel|fbdev>` — X-видеодрайвер (без
+    перезагрузки, с следующего подключения). `fbdev` — самый живучий: X
+    пишет в `/dev/fb0` без единой команды GPU; для железа, где i915 виснет
+    (Atom D4xx/D5xx, GMA3150). Режим ядра `safe` (nomodeset) — `DEFAULT safe`
+    в `syslinux.cfg` на флешке или `VIDEO_MODE=safe` в `site.env`.
   - `PRINTER=<uri>` + `PRINTER_NAME=<имя>` — **сетевой** принтер, пробрасы­
     ваемый в RDP-сессию. Клиент создаёт RAW-очередь CUPS и отдаёт её через
     `/printer`; печатает Windows своим драйвером. URI: `socket://ip:9100`
@@ -188,6 +193,8 @@ nano site.env                   # правишь ТОЛЬКО этот файл
 | `RDP_USER`, `RDP_EXTRA`, `AUTOCONNECT` | RDP-дефолты, автоконнект | `tc.conf` на флешке |
 | `SERVERS` поля 3/4 | настройки сервера: `Имя=адрес;протокол;логин` (`rdp` = без NLA/TLS, `tls`, `nla`; пусто = авто; логин свой у сервера) | `servers.conf` на флешке |
 | `PRINTER`, `PRINTER_NAME` | сетевой принтер | `tc.conf` на флешке |
+| `VIDEO_MODE` | режим ядра: `kms` (штатно) / `safe` (nomodeset + VESA — для железа, где i915 виснет) | `DEFAULT` в `syslinux.cfg` на флешке |
+| `XDRIVER` | X-драйвер: `auto` / `modesetting` / `intel` / `fbdev` | `tc.conf` на флешке |
 | `SERVERS` | список серверов (`Имя=адрес`) | `servers.conf` на флешке |
 
 Пароли — **открытым текстом** (система сама зашифрует) **или готовым хэшем**

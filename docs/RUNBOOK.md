@@ -266,8 +266,16 @@
 ### 5.2 «X server failed to start»
 - **Тихо?** нет (экран 5.1). **Причина:** X не поднялся — «no screens found»
   (не привязался KMS-драйвер, нет `/dev/dri/card0`), сбой xinit/xauth, или
-  glamor-зависон на редких картах. X ведём через `modesetting` (KMS) с
-  `AccelMethod none` — файл `10-video.conf`.
+  glamor-зависон на редких картах. Драйвер выбирает `tc-xconf` перед стартом
+  (`XDRIVER` в tc.conf: auto/modesetting/intel/fbdev), общие флаги —
+  `10-video.conf`.
+- **Ловушка `undefined symbol: fbdevHWSave` / `Failed to load module "fbdev"`
+  → `No drivers available` → `no screens found`:** драйверы X собраны с
+  полным RELRO (`-z now`), dlopen требует все символы сразу, а сабмодули
+  `fbdevhw`/`shadow` (для fbdev) и `vgahw`/`int10` (для intel) X штатно
+  грузит уже после драйвера. Лечится предзагрузкой — `Section "Module"` в
+  `10-video.conf` (есть с v1.4). Именно это, а не «нет /dev/fb0», было
+  причиной старого «no screens found» с fbdev на живом D525.
 - **Проверить (tty2):** `cat /var/log/xsession.log`; `ls /dev/dri /dev/fb*`;
   `dmesg | grep -iE 'i915|drm'` — привязался ли видеодрайвер к чипу.
 - **Что сделать:** если есть `/dev/dri/card0`, X должен подниматься сам; если
@@ -319,17 +327,31 @@
   мыши обновляет cursor-plane, драйвер вешает GPU, тянет за собой всю
   систему. В UTM/QEMU не воспроизводится (там другой GPU) — оттого не
   всплывало на стенде.
-- **Уже лечится:** `10-video.conf` → `Option "SWcursor" "true"` — курсор
-  рисуется как обычная графика, cursor-plane KMS вообще не задействован.
-  Заодно отключён DPMS/blank (`BlankTime/StandbyTime/... 0`), чтобы киоск
-  не гас по энергосбережению (у старых панелей пробуждение тоже бывает
-  сломано).
-- **Если всё равно виснет** (значит i915 KMS на этом степпинге нестабилен
-  сам по себе, не только курсор): лог X-сервера последней сессии лежит на
-  флешке — `lastxorg.log` (вынь, пришли). Крайний обходной путь — увести X
-  с KMS на VESA-фреймбуфер: в `10-video.conf` `Driver "modesetting"` →
-  `Driver "fbdev"` и грузиться с `vga=791` (fbdev software-курсор, никакого
-  i915). Медленнее, но не виснет.
+- **Проверено на живом D425:** софт-курсора (`SWcursor`) НЕ хватает — виснет
+  i915 KMS сам, на любом обновлении экрана. ThinStation на том же железе
+  живёт, потому что не гоняет i915. Поэтому есть два переключателя, оба
+  **без пересборки** (файлы на флешке):
+  1. **Режим ядра** — `syslinux.cfg` на флешке, строка `DEFAULT`:
+     `kms` (штатно, нативное разрешение) или **`safe`** (`nomodeset`: i915
+     не грузится, экран = VESA-фреймбуфер 1024x768, X через fbdev, GPU не
+     получает ни одной команды — виснуть нечему). При сборке задаётся
+     `VIDEO_MODE=safe` в `site.env`.
+  2. **X-драйвер** — `tc.conf` на флешке, `XDRIVER=auto|modesetting|intel|
+     fbdev` (правится `tc-edit tc.conf`, применяется со следующего
+     подключения). `auto` = modesetting при KMS, fbdev без него.
+- **Порядок лечения для Atom D4xx/D5xx (GMA3150):**
+  1. `DEFAULT safe` в `syslinux.cfg` — самый надёжный, начинать с него.
+     Цена: 1024x768 (другие VESA-коды `vga=`: 794 = 1280x1024).
+  2. Хочется нативное разрешение — вернуть `kms` и пробовать
+     `XDRIVER=fbdev` (X пишет в fbdev-эмуляцию i915 без GPU-команд), затем
+     `XDRIVER=intel` (старый intel-DDX с UXA). Что не виснет — то и
+     оставить.
+- **Диагностика:** Settings → Diagnostics, строка `Video:` показывает
+  `boot=kms|safe`, есть ли KMS, чем рисуем (`fb0=`), какой `XDRIVER`.
+  Та же шапка пишется первой строкой в `xsession.log`/`lastsession.log`.
+  При зависании ядро живо (Ctrl+Alt+Del срабатывает) → по SSH с другого
+  компа снять `dmesg | grep -i i915` и `/var/log/Xorg.0.log` живьём —
+  `lastxorg.log` при полном зависании записаться не успевает.
 
 ---
 

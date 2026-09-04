@@ -195,8 +195,16 @@ run_session() {   # $1 = сервер; rc: 0 ок, 254 недоступен, 255
         echo 254 > /tmp/rdp-status
         return 254
     fi
+    # X-драйвер выбирается перед каждым стартом (tc.conf XDRIVER / наличие KMS);
+    # факты о видео — в шапку лога, чтобы с флешки было видно, в каком режиме упало
+    XDRV=$(/usr/bin/tc-xconf 2>/dev/null)
+    {
+        echo "video: xdriver=$XDRV kms=$([ -e /dev/dri/card0 ] && echo yes || echo no)" \
+             "fb0=$(cat /sys/class/graphics/fb0/name 2>/dev/null || echo none)" \
+             "cmdline=$(tr -d '\n' < /proc/cmdline)"
+    } > /var/log/xsession.log
     # X живёт только пока идёт RDP-сессия; вышел из Windows — вернулся в меню
-    xinit /usr/bin/tc-session "$1" -- -nolisten tcp >/var/log/xsession.log 2>&1
+    xinit /usr/bin/tc-session "$1" -- -nolisten tcp >>/var/log/xsession.log 2>&1
     # если X умер грязно и оставил VT в графическом режиме — вернуть консоль
     chvt 1 2>/dev/null
     rc=$(cat /tmp/rdp-status 2>/dev/null)
@@ -271,6 +279,11 @@ run_diag() {
     clear
     echo "=== Diagnostics ==="
     echo "Host: $(hostname)   Version: $(cat /etc/tc-release 2>/dev/null)"
+    # видео: режим ядра (kms/safe), есть ли KMS, чем рисуем, какой X-драйвер
+    _vm=kms; grep -q nomodeset /proc/cmdline 2>/dev/null && _vm=safe
+    _xd=$(/usr/bin/tc-getconf XDRIVER 2>/dev/null); _xd=${_xd:-auto}
+    echo "Video: boot=$_vm  kms=$([ -e /dev/dri/card0 ] && echo yes || echo no)" \
+         " fb0=$(cat /sys/class/graphics/fb0/name 2>/dev/null || echo none)  XDRIVER=$_xd"
     echo
     echo "-- Interfaces --"
     ip -br addr 2>/dev/null | grep -v '^lo '
