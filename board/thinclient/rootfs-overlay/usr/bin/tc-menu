@@ -203,8 +203,18 @@ run_session() {   # $1 = сервер; rc: 0 ок, 254 недоступен, 255
              "fb0=$(cat /sys/class/graphics/fb0/name 2>/dev/null || echo none)" \
              "cmdline=$(tr -d '\n' < /proc/cmdline)"
     } > /var/log/xsession.log
-    # X живёт только пока идёт RDP-сессия; вышел из Windows — вернулся в меню
-    xinit /usr/bin/tc-session "$1" -- -nolisten tcp >>/var/log/xsession.log 2>&1
+    # Убить остатки прошлого X: два X-сервера на одном simple-framebuffer
+    # (ядро на nomodeset, safe-режим) портят кучу второго -> "Fatal glibc
+    # malloc" и сессия рушится. Гарантируем ровно один экземпляр.
+    for _p in $(pidof Xorg 2>/dev/null); do kill -9 "$_p" 2>/dev/null; done
+    for _p in $(pidof xinit 2>/dev/null); do kill -9 "$_p" 2>/dev/null; done
+    # psplash при загрузке рисует заставку в тот же /dev/fb0 (simplefb); если
+    # к первому подключению ещё жив — два владельца fb -> порча памяти X.
+    for _p in $(pidof psplash 2>/dev/null); do kill "$_p" 2>/dev/null; done
+    # X живёт только пока идёт RDP-сессия; вышел из Windows — вернулся в меню.
+    # vt7: X на ВЫДЕЛЕННОМ виртуальном терминале, не поверх лаунчера (tty1) —
+    # иначе на simplefb X ложится на активную консоль и бьёт память.
+    xinit /usr/bin/tc-session "$1" -- :0 vt7 -nolisten tcp >>/var/log/xsession.log 2>&1
     # если X умер грязно и оставил VT в графическом режиме — вернуть консоль
     chvt 1 2>/dev/null
     rc=$(cat /tmp/rdp-status 2>/dev/null)

@@ -24,10 +24,16 @@ CONFIG_SOFT_WATCHDOG=y
 # gma500 — Poulsbo/Cedar Trail (GMA 500/600/3600/3650), KMS без ускорения — для RDP хватает.
 CONFIG_FB=y
 CONFIG_FB_VESA=y
-CONFIG_FB_SIMPLE=y
+# FB_SIMPLE (fbdev поверх firmware-fb) ОТКЛЮЧЁН: X-драйвер fbdev поверх него
+# на ядре 6.16 портит кучу при отрисовке RDP (Fatal glibc malloc на GMA3150).
+# Firmware-framebuffer забирает DRM_SIMPLEDRM -> /dev/dri/card0 -> X идёт через
+# стабильный modesetting, а не fbdev. (safe-режим: i915.modeset=0, i915 не
+# трогает GPU и не виснет, simpledrm поднимает KMS из VESA-буфера.)
+# CONFIG_FB_SIMPLE is not set
 CONFIG_FRAMEBUFFER_CONSOLE=y
 CONFIG_DRM=y
 CONFIG_DRM_FBDEV_EMULATION=y
+CONFIG_DRM_SIMPLEDRM=y
 CONFIG_AGP=y
 CONFIG_AGP_INTEL=y
 CONFIG_DRM_I915=y
