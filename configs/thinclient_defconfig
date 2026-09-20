@@ -36,7 +36,14 @@ BR2_LINUX_KERNEL_CONFIG_FRAGMENT_FILES="$(BR2_EXTERNAL_THINCLIENT_PATH)/board/th
 # Минимальный X: только сервер, драйверы и xinit — ни WM, ни DE
 BR2_PACKAGE_XORG7=y
 BR2_PACKAGE_XSERVER_XORG_SERVER=y
-BR2_PACKAGE_XDRIVER_XF86_INPUT_LIBINPUT=y
+# Ввод: КЛАССИЧЕСКИЙ evdev, НЕ libinput. libinput 1.29.0 (Buildroot 2025.08)
+# на i686 падает на первом же событии ввода внутри своей новой plugin-системы
+# (gdb по core: assert в wheel_plugin_evdev_frame / SIGSEGV в
+# libinput_device_unref из plugin_system_notify_evdev_frame) — X-сервер
+# умирает при первом нажатии/движении мыши. Проверено на живом Atom D425.
+# Тонкому клиенту нужны только клавиатура+мышь — evdev для этого идеален.
+BR2_PACKAGE_XDRIVER_XF86_INPUT_EVDEV=y
+# BR2_PACKAGE_XDRIVER_XF86_INPUT_LIBINPUT is not set
 BR2_PACKAGE_XDRIVER_XF86_VIDEO_FBDEV=y
 BR2_PACKAGE_XDRIVER_XF86_VIDEO_INTEL=y
 BR2_PACKAGE_XAPP_XINIT=y

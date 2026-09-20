@@ -32,6 +32,17 @@ rm -f "$TARGET_DIR/etc/init.d/S50dropbear"
 # 10-fbdev.conf overlay сам не удалит — иначе он остаётся в target и снова
 # форсит Driver "fbdev" ("no screens found" на реальном Intel/KMS).
 rm -f "$TARGET_DIR/etc/X11/xorg.conf.d/10-fbdev.conf"
+# libinput выкинут (падает на i686, см. defconfig); Buildroot файлы снятых
+# пакетов из target не удаляет — вычищаем сами, иначе stale 40-libinput.conf
+# снова отдаст все устройства драйверу libinput.
+rm -f "$TARGET_DIR/usr/lib/xorg/modules/input/libinput_drv.so" \
+      "$TARGET_DIR/usr/share/X11/xorg.conf.d/40-libinput.conf" \
+      "$TARGET_DIR/usr/lib/libinput.so"* "$TARGET_DIR/usr/bin/libinput" \
+      "$TARGET_DIR/usr/lib/udev/libinput-device-group" \
+      "$TARGET_DIR/usr/lib/udev/libinput-fuzz-extract" \
+      "$TARGET_DIR/usr/lib/udev/libinput-fuzz-to-zero"
+rm -f "$TARGET_DIR"/usr/lib/udev/rules.d/*libinput*.rules
+rm -rf "$TARGET_DIR/usr/share/libinput" "$TARGET_DIR/usr/libexec/libinput" "$TARGET_DIR/etc/libinput"
 
 # sudo: наш sudoers.d-файл должен быть 0440 root:root, иначе sudo его молча
 # игнорирует (проверка прав). Каталог — не world-writable. И гарантируем, что
