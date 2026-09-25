@@ -25,8 +25,22 @@ case "$MODE" in
     modesetting|intel|fbdev) ;;
     *) MODE=auto ;;
 esac
+# Какую DRM-карту отдать X. Под UEFI firmware-буфер (simpledrm) и настоящий
+# GPU (i915 и т.п.) могут жить одновременно как card0/card1; если X сядет на
+# simpledrm, когда дисплеем уже владеет i915 — чёрный экран при живом X.
+# Берём первую карту с НЕ-simple драйвером; simpledrm — только если он один
+# (safe-режим). Результат — в 20-device.conf через Option kmsdev.
+CARD=""; CARDDRV=""
+for c in /sys/class/drm/card[0-9]*; do
+    [ -e "$c/dev" ] || continue
+    d=$(basename "$(readlink -f "$c/device/driver" 2>/dev/null)" 2>/dev/null)
+    case "$d" in
+        simple-framebuffer|simpledrm|"") [ -n "$CARD" ] || { CARD=/dev/dri/$(basename "$c"); CARDDRV=${d:-?}; } ;;
+        *) CARD=/dev/dri/$(basename "$c"); CARDDRV=$d; break ;;
+    esac
+done
 if [ "$MODE" = auto ]; then
-    if [ -e /dev/dri/card0 ]; then MODE=modesetting; else MODE=fbdev; fi
+    if [ -n "$CARD" ]; then MODE=modesetting; else MODE=fbdev; fi
 fi
 # fbdev без /dev/fb0 не взлетит (KMS без fbdev-эмуляции) — тогда modesetting
 if [ "$MODE" = fbdev ] && [ ! -e /dev/fb0 ] && [ -e /dev/dri/card0 ]; then
@@ -36,12 +50,16 @@ fi
 mkdir -p "$(dirname "$OUT")"
 case "$MODE" in
     modesetting)
-        cat > "$OUT" <<'EOF'
+        # PageFlip off: на simpledrm нет page-flip, а на Sandy/Ivy Bridge он
+        # даёт чёрный экран/мигание; RDP-клиенту flip не нужен.
+        cat > "$OUT" <<EOF
 Section "Device"
     Identifier "gpu"
     Driver "modesetting"
+    Option "kmsdev" "${CARD:-/dev/dri/card0}"
     Option "AccelMethod" "none"
     Option "SWcursor" "true"
+    Option "PageFlip" "false"
 EndSection
 EOF
         ;;
@@ -68,4 +86,4 @@ EndSection
 EOF
         ;;
 esac
-echo "$MODE"
+echo "$MODE${CARD:+ ($CARD $CARDDRV)}"

@@ -25,6 +25,7 @@ gen_seed() {
     cp "$BOARD_DIR/tc.conf.sample"      "$SEED/tc.conf.sample"
     # syslinux.cfg тоже через seed: site.env может переключить DEFAULT (kms|safe)
     cp "$BOARD_DIR/syslinux.cfg"        "$SEED/syslinux.cfg"
+    cp "$BOARD_DIR/grub-flash.cfg"      "$SEED/grub.cfg"        # UEFI-аналог syslinux.cfg
     [ -f "$SITE_ENV" ] || return 0
     echo ">>> site.env: запекаю конфиг площадки в образ" >&2
     (
@@ -60,6 +61,7 @@ gen_seed() {
         # режим ядра: VIDEO_MODE=safe -> DEFAULT safe в syslinux.cfg (nomodeset)
         case "${VIDEO_MODE:-}" in
             safe|kms) sed -i "s/^DEFAULT .*/DEFAULT $VIDEO_MODE/" "$SEED/syslinux.cfg"
+                      sed -i "s/^set default=.*/set default=$VIDEO_MODE/" "$SEED/grub.cfg"
                       echo ">>> site.env: VIDEO_MODE=$VIDEO_MODE (DEFAULT в syslinux.cfg)" >&2 ;;
             '') ;;
             *)  echo "!!! site.env: VIDEO_MODE='$VIDEO_MODE' не kms|safe — игнорирую" >&2 ;;
@@ -80,7 +82,7 @@ gen_seed() {
 # собирает x86_64-efi. Нет grub-утилит в системе — тихо живём BIOS-only.
 EFI_DIR="$BINARIES_DIR/efi-gen"
 # минимальный набор: без него mkstandalone тащит ВСЕ модули (~9 МБ на образ)
-EFI_MODULES="boot linux normal fat iso9660 part_msdos part_gpt search search_fs_file efi_gop echo"
+EFI_MODULES="boot linux normal fat iso9660 part_msdos part_gpt search search_fs_file efi_gop echo test configfile ls cat"
 gen_efi() {
     command -v grub-mkstandalone >/dev/null 2>&1 || return 1
     rm -rf "$EFI_DIR"
@@ -135,6 +137,7 @@ build_img() {
     mcopy -i "$PART" "$BINARIES_DIR/bzImage"          ::/bzImage
     mcopy -i "$PART" "$BINARIES_DIR/rootfs.cpio.gz"   ::/initrd.gz
     mcopy -i "$PART" "$SEED/syslinux.cfg"        ::/syslinux.cfg
+    mcopy -i "$PART" "$SEED/grub.cfg"            ::/grub.cfg
     mcopy -i "$PART" "$SEED/servers.conf"             ::/servers.conf
     mcopy -i "$PART" "$SEED/tc.conf.sample"           ::/tc.conf.sample
     [ -f "$SEED/tc.conf" ]    && mcopy -i "$PART" "$SEED/tc.conf"    ::/tc.conf
@@ -192,6 +195,7 @@ build_iso() {
     [ -f "$SEED/tc.conf" ]    && cp "$SEED/tc.conf"    "$ISO_DIR/tc.conf"
     [ -f "$SEED/shell.pass" ] && cp "$SEED/shell.pass" "$ISO_DIR/shell.pass"
     cp "$SEED/syslinux.cfg"        "$ISO_DIR/isolinux/isolinux.cfg"
+    cp "$SEED/grub.cfg"            "$ISO_DIR/grub.cfg"
     cp "$ISOLINUX_BIN"                  "$ISO_DIR/isolinux/"
     [ -n "$LDLINUX" ] && cp "$LDLINUX"  "$ISO_DIR/isolinux/"
 
