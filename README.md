@@ -45,15 +45,18 @@ ncurses-лаунчер · Xorg (поднимается только на вре�
 
 ## Быстрый старт
 
-Готовые образы лежат в [Releases](../../releases):
+Готовый образ лежит в [Releases](../../releases) — **`usb.img`** (с v1.4.0 в
+релизы кладётся только он; `thinclient.iso` собирается локально и нужен для
+проверок в виртуалках, см. «Виртуалки»).
 
 | Образ | Для чего | Как записать | Список серверов |
 |---|---|---|---|
-| `thinclient.iso` | флешка (основной вариант) и виртуалки | balenaEtcher / CD в VM | на флешке — редактируемый (раздел `TCDATA` создаётся при первой загрузке); с CD в VM — read-only |
-| `usb.img` | альтернатива для флешки | `dd` / `./flash-usb.sh` | редактируется из меню |
+| `usb.img` | флешка — боевой вариант | `dd` / `./flash-usb.sh` / balenaEtcher | на FAT-разделе флешки, редактируется из меню и `tc-edit` |
+| `thinclient.iso` (только из сборки) | виртуалки: QEMU/UTM/VirtualBox как CD | CD в VM | read-only; при записи ISO на флешку создаётся раздел `TCDATA` |
 
-1. Записать образ на флешку (≥512 МБ): ISO — балена-этчером как есть,
-   img — `sudo dd if=usb.img of=/dev/sdX bs=4M conv=fsync status=progress`.
+1. Записать `usb.img` на флешку (≥512 МБ):
+   `sudo dd if=usb.img of=/dev/sdX bs=4M conv=fsync status=progress`
+   (или `./flash-usb.sh /dev/sdX` — он ещё и сверит записанное с образом).
 2. В BIOS клиента выставить загрузку с USB (boot-меню: обычно F11/F12/Esc).
 3. Готово: заставка → меню → Enter на сервере → RDP.
 
