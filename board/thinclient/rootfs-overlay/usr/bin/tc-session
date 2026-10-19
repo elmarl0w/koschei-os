@@ -29,6 +29,12 @@ RDP_USER=$(_srv_field "$SRV" 4)          # логин сервера, иначе
 RDP_EXTRA=$(/usr/bin/tc-getconf RDP_EXTRA)
 
 set -- /f /v:"$SRV" /cert:ignore /bpp:16 +clipboard /dynamic-resolution
+# Масштаб интерфейса в сессии (крупнее для слабого зрения): xfreerdp /scale
+# принимает ровно 100|140|180 — другое значение он отвергнет, поэтому фильтр.
+RDP_SCALE=$(/usr/bin/tc-getconf RDP_SCALE)
+case "$RDP_SCALE" in
+    140|180) set -- "$@" /scale:"$RDP_SCALE" ;;
+esac
 [ -n "$RDP_USER" ]   && set -- "$@" /u:"$RDP_USER"
 # Протокол безопасности: rdp = обычный RDP (без NLA/TLS — как `-sec-nla -sec-tls`),
 # tls/nla = только TLS/NLA. Пусто = авто-согласование (по умолчанию).

@@ -52,7 +52,7 @@ gen_seed() {
         # протокол/логин сервера не глобальные — поля 3/4 в строке SERVERS;
         # RDP_USER здесь лишь дефолт-фолбэк; домена нет (пишется в логине)
         for k in STATIC_IP GATEWAY DNS NTP_SERVER KEYMAP WAIT_FOR_IP \
-                 RDP_USER RDP_EXTRA AUTOCONNECT \
+                 RDP_USER RDP_SCALE RDP_EXTRA AUTOCONNECT \
                  PRINTER PRINTER_NAME XDRIVER; do
             eval "v=\${$k:-}"
             [ -n "$v" ] && printf '%s=%s\r\n' "$k" "$v" >> "$SEED/tc.conf"

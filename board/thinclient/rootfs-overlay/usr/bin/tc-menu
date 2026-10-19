@@ -366,8 +366,9 @@ _note() { clear; echo "$1"; sleep 2; }
 # ВНИМАНИЕ: весь видимый в меню текст — только латиница: консольный шрифт на
 # tty1 не рисует кириллицу (получается мусор). Комментарии — можно по-русски.
 _rdp_summary() {
-    _u=$($GET RDP_USER)
-    [ -n "$_u" ] && printf '%s' "$_u" || printf '%s' '-'
+    _u=$($GET RDP_USER); _s=$($GET RDP_SCALE)
+    printf '%s' "${_u:--}"
+    [ -n "$_s" ] && printf ' / %s%%' "$_s"
 }
 _printer_summary() {
     _p=$($GET PRINTER)
@@ -424,12 +425,26 @@ set_network() {
 # servers. Домена нет: при необходимости пишется в логине (CORP\user).
 rdp_defaults_menu() {
     while true; do
+        _sc=$($GET RDP_SCALE); _sc=${_sc:-100}
         ui_menu "RDP defaults" \
             "Login${TAB}$($GET RDP_USER)" \
+            "Scale${TAB}${_sc}%" \
             "Autoconnect${TAB}$($GET AUTOCONNECT)"
         case "$UICHOICE" in
             0) set_key RDP_USER    "Default RDP login (per-server login is set in Manage servers)" ;;
-            1) set_key AUTOCONNECT "Autoconnect (IP or comma-separated list)" ;;
+            1)
+                # xfreerdp /scale умеет только 100/140/180 — выбор из списка
+                ui_menu "Scale (session UI size)" \
+                    "100% - normal (default)" \
+                    "140% - larger" \
+                    "180% - largest"
+                case "$UICHOICE" in
+                    0) $SET RDP_SCALE "" ;;
+                    1) $SET RDP_SCALE 140 ;;
+                    2) $SET RDP_SCALE 180 ;;
+                esac
+                ;;
+            2) set_key AUTOCONNECT "Autoconnect (IP or comma-separated list)" ;;
             *) return ;;
         esac
     done
