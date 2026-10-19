@@ -118,11 +118,23 @@ docker_run() {
         -w /src/buildroot "$IMAGE" sh -c "$1"
 }
 
+# Собрать docker-образ окружения только если его ещё нет (или просят
+# явно: REBUILD_IMAGE=1). Иначе каждый запуск лезет в Docker Hub за
+# метаданными debian:bookworm — а он из России часто недоступен, и сборка
+# падала на ровном месте при давно готовом локальном образе.
+ensure_image() {   # $1=тег  $2...=доп. флаги docker build
+    _tag=$1; shift
+    if [ -z "${REBUILD_IMAGE:-}" ] && docker image inspect "$_tag" >/dev/null 2>&1; then
+        return 0
+    fi
+    docker build "$@" -t "$_tag" .
+}
+
 run() {
     if [ "$MODE" = native ]; then
         ( cd buildroot && sh -c "$1" )
     else
-        docker build -t "$IMAGE" .
+        ensure_image "$IMAGE"
         docker_run "$1"
     fi
 }
@@ -165,7 +177,7 @@ case "$1" in
         # есть syslinux (usb.img) и grub-efi обеих разрядностей (UEFI)
         if [ "$MODE" = docker ]; then
             echo ">>> Финальная сборка образов в amd64-контейнере..."
-            docker build --platform linux/amd64 -t "$IMAGE-amd64" .
+            ensure_image "$IMAGE-amd64" --platform linux/amd64
             TTY_FLAG=""; [ -t 0 ] && TTY_FLAG="-it"
             docker run --rm $TTY_FLAG --platform linux/amd64 -v "$PWD:/src" \
                 -e BINARIES_DIR=/src/buildroot/output/images \

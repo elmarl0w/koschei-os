@@ -169,6 +169,8 @@ ncurses-лаунчер · Xorg (поднимается только на вре�
 git clone https://github.com/elmarl0w/koschei-os && cd koschei-os
 ./build.sh                 # клонирует Buildroot и собирает оба образа
 ./build.sh menuconfig      # покрутить конфиг Buildroot
+REBUILD_IMAGE=1 ./build.sh # пересобрать docker-образ окружения (иначе берётся
+                           # готовый локальный — без похода в Docker Hub)
 NATIVE=1 ./build.sh        # Linux: нативная сборка без Docker
 ```
 
